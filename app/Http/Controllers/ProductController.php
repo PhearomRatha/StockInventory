@@ -72,19 +72,48 @@ public function stock()
     }
 }
 
-    public function index()
-    {
-        try {
-            $products = Product::all();
-            return response()->json([
-                'status' => 200,
-                'message' => 'All products retrieved successfully',
-                'data' => $products
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
-        }
+public function index()
+{
+    try {
+        $products = Product::with(['category', 'supplier'])->get(); // eager load relationships
+
+        $productsTable = $products->map(function ($product) {
+            // Determine status
+            if ($product->stock_quantity == 0) {
+                $status = 'Out of Stock';
+            } elseif ($product->reorder_level > 0 && $product->stock_quantity <= $product->reorder_level) {
+                $status = 'Low Stock';
+            } else {
+                $status = 'In Stock';
+            }
+
+            return [
+                'id' => $product->id,
+                'product' => $product->name,
+                'category' => $product->category ? $product->category->name : null,
+                'supplier' => $product->supplier ? $product->supplier->name : null,
+                'price' => $product->price,
+                'stock' => $product->stock_quantity,
+                'status' => $status,
+
+            ];
+        });
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'All products retrieved successfully',
+            'data' => $productsTable
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 500,
+            'message' => $e->getMessage()
+        ]);
     }
+}
+
+
 
     public function store(Request $request)
     {
@@ -117,11 +146,15 @@ if ($request->hasFile('image')) {
         } catch (\Exception $e) {
             return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
         }
+    }
 
         // use put
-    }public function update(Request $request, $id)
+    public function update(Request $request, $id)
 {
     try {
+
+
+
         // Validate input
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -171,6 +204,8 @@ if ($request->hasFile('image')) {
             'message' => $e->getMessage()
         ]);
     }
+
+
 }
 
 

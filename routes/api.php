@@ -48,15 +48,16 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // ---------------------- DASHBOARD ----------------------
-    Route::prefix('dashboard')->group(function () {
-        Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:admin,manager,seller');
-        Route::get('/total-supplier', [DashboardController::class, 'totalSupplier'])->middleware('role:admin,manager');
-        Route::get('/total-sales', [DashboardController::class, 'totalSale'])->middleware('role:admin,manager,seller');
-        Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:admin,manager,seller');
-        Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:admin,manager,seller');
-        Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:admin,manager,seller');
-        Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:admin,manager,seller');
-    });
+Route::prefix('dashboard')->group(function () {
+    Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-supplier', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
+    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Seller');
+});
+
 
 
 
@@ -72,7 +73,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:Admin,Manager,Seller')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
         Route::post('/products', 'store');
-        Route::patch('/products/{id}', 'update');
+        Route::post('/products/{id}', 'update');
         Route::delete('/products/{id}', 'destroy');
         Route::get('/products/total', 'totalPro');
         Route::get('/products/stock-status', 'stock');
