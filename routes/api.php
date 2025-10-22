@@ -50,7 +50,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // ---------------------- DASHBOARD ----------------------
 Route::prefix('dashboard')->group(function () {
     Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Seller');
-    Route::get('/total-supplier', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
+    Route::get('/totalProduct', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
+        Route::get('/total-supplier', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager');
     Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager,Seller');
     Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Seller');
     Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Seller');

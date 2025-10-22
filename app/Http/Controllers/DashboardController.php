@@ -13,6 +13,46 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
+
+  public function totalProduct()
+{
+    try {
+        $startOfThisMonth = Carbon::now()->startOfMonth();
+        $endOfThisMonth = Carbon::now()->endOfMonth();
+        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
+        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+
+        // Count products added this month and last month
+        $totalThisMonth = Products::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
+        $totalLastMonth = Products::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+
+        // Calculate percent change
+        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
+            $percentChange = 100;
+        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
+            $percentChange = 0;
+        } else {
+            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalLastMonth) * 100;
+        }
+
+        $percentChange = round($percentChange);
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Total products retrieved successfully',
+            'total_this_month' => $totalThisMonth,
+            'total_last_month' => $totalLastMonth,
+            'percent_change' => $percentChange . '%'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 500,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
     // Total customers
 public function totalCustomer()
 {
