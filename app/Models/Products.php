@@ -9,6 +9,8 @@ class Products extends Model
 {
 
     use HasFactory;
+     protected $table = 'products'; // default is 'products'
+    protected $primaryKey = 'id';
 protected $fillable = [
     'name',
     'category_id',

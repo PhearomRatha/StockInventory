@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
@@ -86,14 +87,25 @@ class UserController extends Controller
     }
 
     // Delete user
-    public function destroy($id)
-    {
-        try {
-            $user = User::findOrFail($id);
-            $user->delete();
-            return response()->json(['status'=>200,'message'=>'User deleted successfully'],200);
-        } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
-        }
+public function destroy($id)
+{
+    try {
+        $user = User::findOrFail($id);
+
+        // Set user status to inactive instead of deleting
+        $user->update(['status' => 0]); // 0 = Inactive
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'User set to inactive successfully',
+            'data' => $user
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
     }
+}
+
+
+
 }

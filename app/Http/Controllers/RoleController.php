@@ -7,6 +7,23 @@ use App\Models\Roles as Role;
 
 class RoleController extends Controller
 {
+public function publicRoles()
+{
+    try {
+        // Exclude Admin role (id=1)
+        $roles = Role::where('id', '!=', 1)->get(['id', 'name']); // only id and name
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Roles retrieved successfully',
+            'data' => $roles
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+    }
+}
+
     public function index()
     {
         try {

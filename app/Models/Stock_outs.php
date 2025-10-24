@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Stock_outs extends Model
 {
     use HasFactory;
+    protected $fillable=['remarks',"sold_by","sold_date","total_amount","unit_price","quantity","product_id","customer_id"];
     public function product() {
         return $this->belongsTo(Products::class);
     }

@@ -27,7 +27,8 @@ use App\Http\Controllers\PaymentController;
 // ---------------------- AUTH ----------------------
 // Login route (public)
 Route::post('/login', [AuthController::class, 'login']);
- Route::post('/users', [UserController::class, 'store']);
+Route::get('/pubroles', [RoleController::class, 'publicRoles']);
+ Route::post('/signup', [AuthController::class, 'register']);
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
 
@@ -37,8 +38,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Users (Admin only)
     Route::middleware('role:Admin')->controller(UserController::class)->group(function () {
         Route::get('/users', 'index');
-
-        Route::patch('/users/{id}', 'update');
+         Route::post('/users', [UserController::class, 'store']);
+        Route::post('/users/{id}', 'update');
         Route::delete('/users/{id}', 'destroy');
     });
 
@@ -49,15 +50,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // ---------------------- DASHBOARD ----------------------
 Route::prefix('dashboard')->group(function () {
-    Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Staff');
     Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager');
     Route::get('/total-suppliers', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
-    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager,Seller');
-    Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Staff');
 
-    Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Seller');
-    Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Seller');
-    Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Seller');
+    Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
 });
 
 
@@ -73,7 +74,7 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- PRODUCTS ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(ProductController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
         Route::post('/products', 'store');
         Route::post('/products/{id}', 'update');
@@ -94,12 +95,12 @@ Route::prefix('dashboard')->group(function () {
     Route::middleware('role:Admin,Manager')->controller(SuppliersController::class)->group(function () {
         Route::get('/suppliers', 'index');
         Route::post('/suppliers', 'store');
-        Route::patch('/suppliers/{id}', 'update');
+        Route::post('/suppliers/{id}', 'update');
         Route::delete('/suppliers/{id}', 'destroy');
     });
 
     // ---------------------- CUSTOMERS ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(CustomerController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(CustomerController::class)->group(function () {
         Route::get('/customers', 'index');
         Route::post('/customers', 'store');
         Route::patch('/customers/{id}', 'update');
@@ -107,7 +108,7 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- STOCK INS ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(StockInsController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(StockInsController::class)->group(function () {
         Route::get('/stock-ins', 'index');
         Route::post('/stock-ins', 'store');
         Route::patch('/stock-ins/{id}', 'update');
@@ -116,7 +117,7 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- STOCK OUTS ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(StockOutsController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(StockOutsController::class)->group(function () {
         Route::get('/stock-outs', 'index');
         Route::post('/stock-outs', 'store');
         Route::patch('/stock-outs/{id}', 'update');
@@ -124,7 +125,7 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- SALES ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(SalesController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(SalesController::class)->group(function () {
         Route::get('/sales', 'index');
         Route::post('/sales', 'store');
         Route::patch('/sales/{id}', 'update');
@@ -132,7 +133,7 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- PAYMENTS ----------------------
-    Route::middleware('role:Admin,Manager,Seller')->controller(PaymentController::class)->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(PaymentController::class)->group(function () {
         Route::get('/payments', 'index');
         Route::post('/payments', 'store');
         Route::patch('/payments/{id}', 'update');
