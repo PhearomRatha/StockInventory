@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Sales extends Model
+
 {
     use HasFactory;
+    protected $fillable=["sold_by","payment_method","payment_status","discount","discount","total_amount","invoice_number","customer_id"];
     public function stockOuts() {
         return $this->hasMany(Stock_outs::class);
     }

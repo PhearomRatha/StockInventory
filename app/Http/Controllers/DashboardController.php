@@ -10,317 +10,203 @@ use App\Models\Stock_outs;
 use App\Models\Suppliers;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    // Total Products
+    public function totalProduct()
+    {
+        try {
+            $totalThisMonth = Products::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->count();
 
-  public function totalProduct()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+            $totalLastMonth = Products::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->count();
 
-        // Count products added this month and last month
-        $totalThisMonth = Products::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Products::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
 
-        // Calculate percent change
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalLastMonth) * 100;
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Total products retrieved successfully',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
 
-    // Total customers
-public function totalCustomer()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+    // Total Customers
+    public function totalCustomer()
+    {
+        try {
+            $totalThisMonth = Customers::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->count();
 
-        // Count customers created this month and last month
-        $totalThisMonth = Customers::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Customers::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+            $totalLastMonth = Customers::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->count();
 
-        // Calculate percent change (relative version like your supplier example)
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalThisMonth) * 100;
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
+
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // Round to whole number
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Total customers retrieved successfully',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
-public function totalSales()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
 
-        // Count total sales for this month and last month
-        $totalThisMonth = Sales::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Sales::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+    // Total Sales
+    public function totalSales()
+    {
+        try {
+            $totalThisMonth = Sales::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->count();
 
-        // Calculate percent change (relative version)
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalThisMonth) * 100;
+            $totalLastMonth = Sales::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->count();
+
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
+
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // Round to whole number
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Total sales retrieved successfully',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
 
+    // Total Suppliers
+    public function totalSupplier()
+    {
+        try {
+            $totalThisMonth = Suppliers::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->count();
 
-    // Total products
-public function totalSupplier()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+            $totalLastMonth = Suppliers::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->count();
 
-        // Count suppliers created this month and last month
-        $totalThisMonth = Suppliers::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Suppliers::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
 
-        // Calculate percent change (relative version)
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalThisMonth) * 100;
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // Round to whole number
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 'success',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage()
-        ], 500);
     }
-}
 
+    // Total Stock-In
+    public function totalStockIn()
+    {
+        try {
+            $totalThisMonth = Stock_ins::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->sum('quantity');
 
-    // Total stock-in
-public function totalStockIn()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+            $totalLastMonth = Stock_ins::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->sum('quantity');
 
-        // Count stock-in records for this month and last month
-        $totalThisMonth = Stock_ins::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Stock_ins::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
 
-        // Calculate percent change (relative version like your supplier example)
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalThisMonth) * 100;
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // Round to whole number
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Total stock-in records retrieved successfully',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
 
+    // Total Stock-Out
+    public function totalStockOut()
+    {
+        try {
+            $totalThisMonth = Stock_outs::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->sum('quantity');
 
-    // Total stock-out
-   public function totalStockOut()
-{
-    try {
-        $startOfThisMonth = Carbon::now()->startOfMonth();
-        $endOfThisMonth = Carbon::now()->endOfMonth();
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
+            $totalLastMonth = Stock_outs::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->sum('quantity');
 
-        // Count stock-out records for this month and last month
-        $totalThisMonth = Stock_outs::whereBetween('created_at', [$startOfThisMonth, $endOfThisMonth])->count();
-        $totalLastMonth = Stock_outs::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
 
-        // Calculate percent change (relative version)
-        if ($totalLastMonth == 0 && $totalThisMonth > 0) {
-            $percentChange = 100;
-        } elseif ($totalLastMonth == 0 && $totalThisMonth == 0) {
-            $percentChange = 0;
-        } else {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalThisMonth) * 100;
+            return response()->json([
+                'status' => 200,
+                'total_this_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // Round to whole number
-        $percentChange = round($percentChange);
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Total stock-out records retrieved successfully',
-            'total_this_month' => $totalThisMonth,
-            'total_last_month' => $totalLastMonth,
-            'percent_change' => $percentChange . '%'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
 
+    // Stock-In Summary (Today, Month, Year)
+    public function stockInSummary()
+    {
+        try {
+            $today = Carbon::today();
+            $totalToday = Stock_ins::whereDate('created_at', $today)->sum('quantity');
+            $totalThisMonth = Stock_ins::whereBetween('created_at', [
+                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()
+            ])->sum('quantity');
+            $totalLastMonth = Stock_ins::whereBetween('created_at', [
+                Carbon::now()->subMonth()->startOfMonth(), Carbon::now()->subMonth()->endOfMonth()
+            ])->sum('quantity');
+            $totalYear = Stock_ins::whereBetween('created_at', [
+                Carbon::now()->startOfYear(), Carbon::now()
+            ])->sum('quantity');
 
-    // Total stock-in for today month and year
-   public function stockInSummary()
-{
-    try {
-        $today = Carbon::today();
+            $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
 
-        // 🟩 This month
-        $startOfMonth = Carbon::now()->startOfMonth();
-        $endOfMonth = Carbon::now()->endOfMonth();
-        $totalThisMonth = Stock_ins::whereBetween('created_at', [$startOfMonth, $endOfMonth])->sum('quantity');
-
-        // 🟨 Previous month
-        $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $endOfLastMonth = Carbon::now()->subMonth()->endOfMonth();
-        $totalLastMonth = Stock_ins::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->sum('quantity');
-
-        // 🧮 Calculate percentage difference
-        if ($totalLastMonth > 0) {
-            $percentChange = (($totalThisMonth - $totalLastMonth) / $totalLastMonth) * 100;
-        } else {
-            // Avoid division by zero
-            $percentChange = 0;
+            return response()->json([
+                'status' => 200,
+                'total_today' => $totalToday,
+                'total_month' => $totalThisMonth,
+                'total_last_month' => $totalLastMonth,
+                'total_year' => $totalYear,
+                'percent_change' => $percentChange
+            ]);
+        } catch (\Exception $e) {
+            return $this->jsonError($e);
         }
-
-        // 🕐 Today
-        $totalToday = Stock_ins::whereDate('created_at', $today)->sum('quantity');
-
-        // 🗓️ Year
-        $startOfYear = Carbon::now()->startOfYear();
-        $totalYear = Stock_ins::whereBetween('created_at', [$startOfYear, Carbon::now()])->sum('quantity');
-
-        return response()->json([
-            'status' => 200,
-            'message' => 'Stock-in summary retrieved successfully',
-            'total_stock_in_today' => $totalToday,
-            'total_stock_in_month' => $totalThisMonth,
-            'total_stock_in_year' => $totalYear,
-            'total_stock_in_last_month' => $totalLastMonth,
-            'percent_change_from_last_month' => round($percentChange, 2) . '%'
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
-}
 
-
-
-    // Example: Stock alert
+    // Stock Alert
     public function stockAlert()
     {
         try {
-            $products = Products::all();
             $alerts = [];
+            $products = Products::all();
 
             foreach ($products as $product) {
                 if ($product->quantity == 0) {
-                    $alerts[] = " {$product->name} is out of stock.";
+                    $alerts[] = "{$product->name} is out of stock";
                 } elseif ($product->quantity <= ($product->max_quantity * 0.3)) {
-                    $alerts[] = "{$product->name} stock is lower than 30%.";
+                    $alerts[] = "{$product->name} stock is lower than 30%";
                 }
             }
 
@@ -329,10 +215,67 @@ public function totalStockIn()
                 'alerts' => $alerts
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'status' => 500,
-                'error' => $e->getMessage()
-            ]);
+            return $this->jsonError($e);
         }
     }
+
+    // Helper: Calculate percent change
+    private function calculatePercentChange($current, $previous)
+    {
+        if ($previous == 0 && $current > 0) return 100;
+        if ($previous == 0 && $current == 0) return 0;
+        return round((($current - $previous) / $previous) * 100, 2);
+    }
+
+    // Helper: JSON Error Response
+    private function jsonError($e)
+    {
+        return response()->json([
+            'status' => 500,
+            'error' => $e->getMessage()
+        ]);
+    }
+
+
+public function salesTrend()
+{
+    $sales = Sales::select(
+        DB::raw('DATE(created_at) as date'),
+        DB::raw('SUM(total_amount) as total_sales')
+    )
+    ->groupBy('date')
+    ->orderBy('date')
+    ->get();
+
+    // Convert total_sales to number
+    $sales = $sales->map(function($item) {
+        return [
+            'date' => $item->date,
+            'total_sales' => (float) $item->total_sales
+        ];
+    });
+
+    return response()->json([
+        'status' => 200,
+        'message' => 'Sales trend retrieved successfully',
+        'data' => $sales
+    ]);
 }
+public function stockLevels()
+{
+    $products = Products::select('name as product', 'quantity as stock')->get();
+
+    // Optional: highlight low stock for charts
+    $products = $products->map(function($item) {
+        return [
+            'product' => $item->product,
+            'stock' => (int) $item->stock,
+        ];
+    });
+
+    return response()->json($products);
+}
+
+}
+
+
