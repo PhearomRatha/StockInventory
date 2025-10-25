@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 class customers extends Model
 {
     use HasFactory;
+
     protected $table="customers";
+    protected $fillable =["notes","preferences","address","phone","email","name"];
      public function stockOuts() {
         return $this->hasMany(Stock_outs::class);
     }
