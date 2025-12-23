@@ -127,7 +127,7 @@ class ProductController extends Controller
                 'barcode' => 'nullable|string',
                 'description' => 'nullable|string',
                 'cost' => 'required|numeric',
-                'price' => 'nullable|numeric', // optional, will auto-calc if missing
+                'price' => 'nullable|numeric',
                 'stock_quantity' => 'required|integer',
                 'reorder_level' => 'nullable|integer',
                 'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
@@ -139,7 +139,7 @@ class ProductController extends Controller
                 $validated['image'] = $path;
             }
 
-            // Auto-calculate price if not provided (20% markup)
+            // Auto-calculate price if not provided
             if (!isset($validated['price'])) {
                 $validated['price'] = round($validated['cost'] * 1.2, 2); // 2 decimal points
             }

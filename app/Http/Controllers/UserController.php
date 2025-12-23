@@ -74,7 +74,7 @@ class UserController extends Controller
             if(isset($validated['password'])){
                 $validated['password'] = Hash::make($validated['password']);
             } else {
-                unset($validated['password']); // avoid null
+                unset($validated['password']);
             }
 
             $user->update($validated);

@@ -28,13 +28,12 @@ use App\Http\Controllers\PaymentController;
 // Login route (public)
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/pubroles', [RoleController::class, 'publicRoles']);
- Route::post('/signup', [AuthController::class, 'register']);
+Route::post('/signup', [AuthController::class, 'register']);
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // Logout route
     Route::post('/logout', [AuthController::class, 'logout']);
-
     // Users (Admin only)
     Route::middleware('role:Admin')->controller(UserController::class)->group(function () {
         Route::get('/users', 'index');
@@ -51,19 +50,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // ---------------------- DASHBOARD ----------------------
 Route::prefix('dashboard')->group(function () {
     Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager');
+    Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager,Staff');
     Route::get('/total-suppliers', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
-    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager');
     Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Staff');
 
     Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Staff');
     Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
     Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
 });
-
-
-
-
 
     // ---------------------- ROLES ----------------------
     Route::middleware('role:Admin')->controller(RoleController::class)->group(function () {
