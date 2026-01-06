@@ -23,6 +23,10 @@ use App\Http\Controllers\PaymentController;
 | Role-based access and token protection included
 |--------------------------------------------------------------------------
 */
+Route::get('/test', function () {
+    return response()->json(['status' => 'ok']);
+});
+
 
 // ---------------------- AUTH ----------------------
 // Login route (public)
@@ -71,8 +75,9 @@ Route::prefix('dashboard')->group(function () {
     // ---------------------- PRODUCTS ----------------------
     Route::middleware('role:Admin,Manager,Staff')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
+        Route::get('/products/{id}', 'show');
         Route::post('/products', 'store');
-        Route::post('/products/{id}', 'update');
+        Route::patch('/products/{id}', 'update');
         Route::delete('/products/{id}', 'destroy');
         Route::get('/products/total', 'totalPro');
         Route::get('/products/stock-status', 'stock');
