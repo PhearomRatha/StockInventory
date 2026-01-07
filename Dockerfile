@@ -1,29 +1,37 @@
-# 1. Use PHP 8.2 with Apache
+# Use PHP 8.2 with Apache
 FROM php:8.2-apache
 
-# 2. Set working directory
-WORKDIR /var/www/html
-
-# 3. Install dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    libzip-dev zip unzip git \
-    && docker-php-ext-install pdo pdo_mysql
+    libonig-dev \
+    libzip-dev \
+    unzip \
+    git \
+    curl \
+    && docker-php-ext-install pdo_mysql mbstring zip
 
-# 4. Enable Apache rewrite module
+# Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
-# 5. Copy project files
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy project files
 COPY . .
 
-# 6. Install Composer
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
-# 7. Set permissions
+# Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# 8. Expose port 10000
-EXPOSE 10000
+# Apache: set DocumentRoot to public
+RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
-# 9. Start Apache
+# Expose port
+EXPOSE 80
+
+# Start Apache
 CMD ["apache2-foreground"]
