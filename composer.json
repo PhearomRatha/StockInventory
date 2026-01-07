@@ -6,6 +6,8 @@
     "license": "MIT",
     "require": {
         "php": ">=8.2",
+            "ext-pgsql": "*",
+    "ext-pdo_pgsql": "*",
         "cloudinary-labs/cloudinary-laravel": "^2.3",
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^10.10",
@@ -55,6 +57,7 @@
         }
     },
     "config": {
+          "platform-check": false,
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
