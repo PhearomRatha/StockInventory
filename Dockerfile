@@ -1,14 +1,15 @@
 # Use PHP 8.2 with Apache
 FROM php:8.2-apache
 
-# Install system dependencies
+# Install system dependencies and PostgreSQL driver
 RUN apt-get update && apt-get install -y \
     libonig-dev \
     libzip-dev \
     unzip \
     git \
     curl \
-    && docker-php-ext-install pdo_mysql mbstring zip
+    libpq-dev \   # PostgreSQL dev library
+    && docker-php-ext-install pdo pdo_pgsql pgsql mbstring zip
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
