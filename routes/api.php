@@ -14,6 +14,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
+use Illuminate\Support\Facades\DB;
 
 /*
 |--------------------------------------------------------------------------
@@ -23,10 +24,14 @@ use App\Http\Controllers\PaymentController;
 | Role-based access and token protection included
 |--------------------------------------------------------------------------
 */
-Route::get('/test', function () {
-    return response()->json(['status' => 'ok']);
+Route::get('/test-db', function () {
+    try {
+        DB::connection()->getPdo();
+        return "Database connected successfully!";
+    } catch (\Exception $e) {
+        return "Database connection failed: " . $e->getMessage();
+    }
 });
-
 
 // ---------------------- AUTH ----------------------
 // Login route (public)
