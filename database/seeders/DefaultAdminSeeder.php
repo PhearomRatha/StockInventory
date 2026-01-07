@@ -14,18 +14,22 @@ class DefaultAdminSeeder extends Seeder
         // Create default role
         $adminRole = Roles::firstOrCreate(
             ['name' => 'Admin'],
-            ['permissions' => 'all']
+            ['permissions' => json_encode(['all'])]
         );
 
         // Create default admin user
-        User::firstOrCreate(
+        $adminUser = User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [
                 'name' => 'Admin',
                 'password' => Hash::make('password123'),
-                'status' => 'active',
+                'status' => true,
                 'role_id' => $adminRole->id
             ]
         );
+
+        // Show debug info
+        dump($adminRole->toArray());
+        dump($adminUser->toArray());
     }
 }
