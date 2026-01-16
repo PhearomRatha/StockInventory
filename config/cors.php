@@ -16,7 +16,7 @@ return [
     */
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    'allowed_origins' => ['https://stockinventoryfront.onrender.com/'],
+    'allowed_origins' => ['https://stockinventoryfront.onrender.com'],
 
     'allowed_methods' => ['*'],
 
