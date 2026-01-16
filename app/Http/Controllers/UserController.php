@@ -13,7 +13,7 @@ class UserController extends Controller
     public function index()
     {
         try {
-            $users = User::all();
+            $users = User::with("roles")->paginate(8);
             return response()->json([
                 'status' => 200,
                 'message' => 'Users retrieved successfully',
@@ -23,6 +23,8 @@ class UserController extends Controller
             return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
+
+    // select user with role , filter with 
 
     // Create new user (Pending by default)
    public function store(Request $request)

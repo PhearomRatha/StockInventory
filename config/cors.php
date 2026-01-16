@@ -16,7 +16,9 @@ return [
     */
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    'allowed_origins' => ['https://stockinventoryfront.onrender.com'],
+    // 'allowed_origins' => ['https://stockinventoryfront.onrender.com'],
+//    'allowed_origins' => ['http://localhost:5173'], 
+    'allowed_origins' => ['https://stock-inventory-front.vercel.app'],
 
     'allowed_methods' => ['*'],
 
@@ -29,8 +31,9 @@ return [
     'exposed_headers' => [],
 
     'max_age' => 0,
+    //set to false when deploy
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 
 ];
