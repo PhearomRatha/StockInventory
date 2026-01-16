@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\Activity_logs as ActivityLog;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
@@ -40,6 +41,8 @@ class UserController extends Controller
         $validated['status'] = 'pending';
 
         $user = User::create($validated);
+
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'created', 'module' => 'users', 'record_id' => $user->id]);
 
         // Generate token if needed
         $token = $user->createToken('api-token')->plainTextToken;
@@ -79,6 +82,8 @@ class UserController extends Controller
 
             $user->update($validated);
 
+            ActivityLog::create(['user_id' => auth()->id(), 'action' => 'updated', 'module' => 'users', 'record_id' => $user->id]);
+
             return response()->json([
                 'status'=>200,
                 'message'=>'User updated successfully',
@@ -96,6 +101,8 @@ public function destroy($id)
     try {
         $user = User::findOrFail($id);
         $user->delete();
+
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'deleted', 'module' => 'users', 'record_id' => $user->id]);
 
         return response()->json([
             'status' => 200,

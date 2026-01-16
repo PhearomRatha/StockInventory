@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class Activity_logs extends Model
 {
     use HasFactory;
-       public function user() {
+
+    protected $fillable = [
+        'user_id',
+        'action',
+        'module',
+        'record_id',
+    ];
+
+    public function user() {
         return $this->belongsTo(User::class);
     }
 }

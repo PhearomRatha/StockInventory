@@ -14,6 +14,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -67,6 +68,8 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Staff');
     Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
     Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/sales-trend', [DashboardController::class, 'salesTrend'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/stock-levels', [DashboardController::class, 'stockLevels'])->middleware('role:Admin,Manager,Staff');
 });
 
     // ---------------------- ROLES ----------------------
@@ -127,6 +130,7 @@ Route::prefix('dashboard')->group(function () {
         Route::post('/stock-outs', 'store');
         Route::patch('/stock-outs/{id}', 'update');
         Route::delete('/stock-outs/{id}', 'destroy');
+        Route::get('/stock-outs/{id}/receipt', 'receipt');
     });
 
     // ---------------------- SALES ----------------------
@@ -135,6 +139,9 @@ Route::prefix('dashboard')->group(function () {
         Route::post('/sales', 'store');
         Route::patch('/sales/{id}', 'update');
         Route::delete('/sales/{id}', 'destroy');
+        Route::get('/sales/dashboard', 'dashboard');
+        Route::post('/sales/checkout', 'checkoutSale');
+        Route::post('/sales/verify-payment', 'verifySalePayment');
     });
 
     // ---------------------- PAYMENTS ----------------------
@@ -143,14 +150,28 @@ Route::prefix('dashboard')->group(function () {
         Route::post('/payments', 'store');
         Route::patch('/payments/{id}', 'update');
         Route::delete('/payments/{id}', 'destroy');
+        Route::get('/payments/dashboard', 'dashboard');
+        Route::post('/payments/checkout', 'checkoutPayment');
+        Route::post('/payments/verify', 'verifyPayment');
     });
 
-    // ---------------------- ACTIVITY LOGS ----------------------
-    Route::middleware('role:Admin')->controller(ActivityLogsController::class)->group(function () {
-        Route::get('/activity-logs', 'index');
-        Route::post('/activity-logs', 'store');
-        Route::patch('/activity-logs/{id}', 'update');
-        Route::delete('/activity-logs/{id}', 'destroy');
+    // ---------------------- REPORTS ----------------------
+    Route::middleware('role:Admin,Manager')->controller(ReportController::class)->group(function () {
+        Route::get('/reports/sales', 'salesReport');
+        Route::get('/reports/financial', 'financialReport');
+        Route::get('/reports/stock', 'stockReport');
+        Route::get('/reports/activity-logs', 'activityLogReport');
     });
+
+
+   // ---------------------- ACTIVITY LOGS ----------------------
+Route::middleware('role:Admin')->controller(ActivityLogsController::class)->group(function () {
+    Route::get('/activity-logs', 'index');
+    Route::get('/activity-logs/filter', 'filter');   // <-- ADD THIS
+    Route::post('/activity-logs', 'store');
+    Route::patch('/activity-logs/{id}', 'update');
+    Route::delete('/activity-logs/{id}', 'destroy');
+});
+
 
 });

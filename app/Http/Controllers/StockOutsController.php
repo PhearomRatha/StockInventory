@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Stock_outs as StockOut;
 use App\Models\Products as Product;
+use App\Models\Activity_logs as ActivityLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class StockOutsController extends Controller
 {
@@ -13,23 +15,25 @@ class StockOutsController extends Controller
      */
     public function index()
     {
-        $stockOuts = StockOut::with(['product','customer','soldBy'])
-            ->orderBy('sold_date','asc')
-            ->get();
+        return Cache::remember('stock_outs_list', 5, function () {
+            $stockOuts = StockOut::with(['product','customer','soldBy'])
+                ->orderBy('sold_date','asc')
+                ->get();
 
-        return response()->json($stockOuts->map(function($sale){
-            return [
-                'id' => $sale->id,
-                'customer_name' => $sale->customer->name ?? '',
-                'product_name' => $sale->product->name ?? '',
-                'quantity' => $sale->quantity,
-                'unit_price' => $sale->unit_price,
-                'total_amount' => $sale->total_amount,
-                'sold_date' => $sale->sold_date,
-                'sold_by' => $sale->soldBy->name ?? '',
-                'remarks' => $sale->remarks
-            ];
-        }), 200);
+            return response()->json($stockOuts->map(function($sale){
+                return [
+                    'id' => $sale->id,
+                    'customer_name' => $sale->customer->name ?? '',
+                    'product_name' => $sale->product->name ?? '',
+                    'quantity' => $sale->quantity,
+                    'unit_price' => $sale->unit_price,
+                    'total_amount' => $sale->total_amount,
+                    'sold_date' => $sale->sold_date,
+                    'sold_by' => $sale->soldBy->name ?? '',
+                    'remarks' => $sale->remarks
+                ];
+            }), 200);
+        });
     }
 
     /**
@@ -57,6 +61,8 @@ class StockOutsController extends Controller
         $product = Product::findOrFail($validated['product_id']);
         $product->stock_quantity -= $validated['quantity'];
         $product->save();
+
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'created', 'module' => 'stock_outs', 'record_id' => $stockOut->id]);
 
         // Load relationships for proper names
         $stockOut->load(['customer', 'product', 'soldBy']);
@@ -113,6 +119,8 @@ class StockOutsController extends Controller
 
         $stockOut->update($validated);
 
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'updated', 'module' => 'stock_outs', 'record_id' => $stockOut->id]);
+
         return response()->json([
             'id' => $stockOut->id,
             'customer_name' => $stockOut->customer->name ?? '',
@@ -140,6 +148,8 @@ class StockOutsController extends Controller
 
         $stockOut->delete();
 
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'deleted', 'module' => 'stock_outs', 'record_id' => $stockOut->id]);
+
         return response()->json(['message'=>'Stock-out deleted successfully'],200);
     }
 
@@ -148,18 +158,20 @@ class StockOutsController extends Controller
      */
     public function receipt($id)
     {
-        $sale = StockOut::with(['product','customer','soldBy'])->findOrFail($id);
+        return Cache::remember("stock_out_receipt_{$id}", 5, function () use ($id) {
+            $sale = StockOut::with(['product','customer','soldBy'])->findOrFail($id);
 
-        return response()->json([
-            'invoice_id' => "INV-".$sale->id,
-            'customer' => $sale->customer->name ?? '',
-            'product' => $sale->product->name ?? '',
-            'quantity' => $sale->quantity,
-            'unit_price' => $sale->unit_price,
-            'total_amount' => $sale->total_amount,
-            'sold_by' => $sale->soldBy->name ?? '',
-            'date' => $sale->sold_date,
-            'remarks' => $sale->remarks
-        ]);
+            return response()->json([
+                'invoice_id' => "INV-".$sale->id,
+                'customer' => $sale->customer->name ?? '',
+                'product' => $sale->product->name ?? '',
+                'quantity' => $sale->quantity,
+                'unit_price' => $sale->unit_price,
+                'total_amount' => $sale->total_amount,
+                'sold_by' => $sale->soldBy->name ?? '',
+                'date' => $sale->sold_date,
+                'remarks' => $sale->remarks
+            ]);
+        });
     }
 }

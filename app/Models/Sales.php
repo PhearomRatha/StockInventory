@@ -10,7 +10,17 @@ class Sales extends Model
 
 {
     use HasFactory;
-    protected $fillable=["sold_by","payment_method","payment_status","discount","discount","total_amount","invoice_number","customer_id"];
+protected $fillable = [
+    'customer_id',
+    'sold_by',
+    'invoice_number',
+    'total_amount',
+    'discount',
+    'payment_status',
+    'payment_method',
+    'status'
+];
+
     public function stockOuts() {
         return $this->hasMany(Stock_outs::class);
     }
@@ -25,5 +35,9 @@ class Sales extends Model
 
     public function payments() {
         return $this->morphMany(Payment::class, 'reference');
+    }
+
+    public function saleItems() {
+        return $this->hasMany(SaleItem::class, 'sale_id');
     }
 }

@@ -6,9 +6,9 @@
     "license": "MIT",
     "require": {
         "php": ">=8.2",
-   
         "cloudinary-labs/cloudinary-laravel": "^2.3",
         "guzzlehttp/guzzle": "^7.2",
+        "khqr-gateway/bakong-khqr-php": "^1.0",
         "laravel/framework": "^10.10",
         "laravel/sanctum": "^3.3",
         "laravel/tinker": "^2.8",
