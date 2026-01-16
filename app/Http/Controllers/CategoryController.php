@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\categories as Category;
+use App\Models\Categories as Category;
 
 class CategoryController extends Controller
 {
@@ -12,6 +12,16 @@ class CategoryController extends Controller
         try {
             $categories = Category::all();
             return response()->json(['status'=>200,'message'=>'Categories retrieved successfully','data'=>$categories],200);
+        } catch (\Exception $e) {
+            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $category = Category::findOrFail($id);
+            return response()->json(['status'=>200,'message'=>'Category retrieved successfully','data'=>$category],200);
         } catch (\Exception $e) {
             return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }

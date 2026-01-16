@@ -94,6 +94,7 @@ Route::prefix('dashboard')->group(function () {
     // ---------------------- CATEGORIES ----------------------
     Route::middleware('role:Admin,Manager')->controller(CategoryController::class)->group(function () {
         Route::get('/categories', 'index');
+        Route::get('/categories/{id}', 'show');
         Route::post('/categories', 'store');
         Route::patch('/categories/{id}', 'update');
         Route::delete('/categories/{id}', 'destroy');
@@ -110,6 +111,7 @@ Route::prefix('dashboard')->group(function () {
     // ---------------------- CUSTOMERS ----------------------
     Route::middleware('role:Admin,Manager,Staff')->controller(CustomerController::class)->group(function () {
         Route::get('/customers', 'index');
+        Route::get('/customers/{id}', 'show');
         Route::post('/customers', 'store');
         Route::patch('/customers/{id}', 'update');
         Route::delete('/customers/{id}', 'destroy');

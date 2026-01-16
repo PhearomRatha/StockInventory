@@ -10,7 +10,7 @@ class Customers extends Model
     use HasFactory;
 
     protected $table="customers";
-    protected $fillable =["notes","preferences","address","phone","email","name"];
+    protected $fillable =["notes","preferences","address","phone","email","name","type"];
      public function stockOuts() {
         return $this->hasMany(Stock_outs::class);
     }

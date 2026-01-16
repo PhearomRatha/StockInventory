@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\customers as Customer;
+use App\Models\Customers as Customer;
 use App\Models\Activity_logs as ActivityLog;
 
 class CustomerController extends Controller
@@ -20,7 +20,17 @@ class CustomerController extends Controller
         }
     }
 
-   public function store(Request $request)
+    public function show($id)
+    {
+        try {
+            $customer = Customer::findOrFail($id);
+            return response()->json(['status'=>200,'message'=>'Customer retrieved successfully','data'=>$customer],200);
+        } catch (\Exception $e) {
+            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+        }
+    }
+
+    public function store(Request $request)
 {
     try {
         $validated = $request->validate([
