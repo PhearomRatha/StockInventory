@@ -17,8 +17,8 @@ return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
     // 'allowed_origins' => ['https://stockinventoryfront.onrender.com'],
-//    'allowed_origins' => ['http://localhost:5173'], 
-    'allowed_origins' => ['https://stock-inventory-front.vercel.app'],
+  
+    'allowed_origins' => ['https://stock-inventory-front.vercel.app','http://localhost:3000','http://localhost:5173'],
 
     'allowed_methods' => ['*'],
 

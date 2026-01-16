@@ -59,17 +59,16 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // ---------------------- DASHBOARD ----------------------
 Route::prefix('dashboard')->group(function () {
-    Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/total-suppliers', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
-    Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager');
-    Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Staff');
-
-    Route::get('/total-stockout', [DashboardController::class, 'totalStockOut'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/sales-trend', [DashboardController::class, 'salesTrend'])->middleware('role:Admin,Manager,Staff');
-    Route::get('/stock-levels', [DashboardController::class, 'stockLevels'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/total-suppliers', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
+    // Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager');
+    // Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Staff');
+    Route::get('/index', [DashboardController::class, 'index'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/sales-trend', [DashboardController::class, 'salesTrend'])->middleware('role:Admin,Manager,Staff');
+    // Route::get('/stock-levels', [DashboardController::class, 'stockLevels'])->middleware('role:Admin,Manager,Staff');
 });
 
     // ---------------------- ROLES ----------------------
@@ -120,6 +119,7 @@ Route::prefix('dashboard')->group(function () {
     // ---------------------- STOCK INS ----------------------
     Route::middleware('role:Admin,Manager,Staff')->controller(StockInsController::class)->group(function () {
         Route::get('/stock-ins', 'index');
+        Route::get('stock-ins/overview', 'overview');
         Route::post('/stock-ins', 'store');
         Route::patch('/stock-ins/{id}', 'update');
         Route::delete('/stock-ins/{id}', 'destroy');
@@ -131,7 +131,9 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/stock-outs', 'index');
         Route::post('/stock-outs', 'store');
         Route::patch('/stock-outs/{id}', 'update');
-        Route::delete('/stock-outs/{id}', 'destroy');
+        Route::get('/stock-outs/{id}', 'destroy');
+        Route::get('/stock-out-dashboard', 'dashboardData');
+
         Route::get('/stock-outs/{id}/receipt', 'receipt');
     });
 

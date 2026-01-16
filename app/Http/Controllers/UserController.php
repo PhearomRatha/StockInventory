@@ -9,60 +9,66 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    // Get all users
+    // Get all users with role (single endpoint)
     public function index()
     {
         try {
-            $users = User::with("roles")->paginate(8);
+            // Select only needed fields + eager load role
+            $users = User::select('id', 'name', 'email', 'status', 'role_id')
+                ->with(['role:id,name'])
+                ->paginate(12);
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Users retrieved successfully',
                 'data' => $users
             ]);
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return response()->json([
+                'status' => 500,
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
-    // select user with role , filter with 
-
     // Create new user (Pending by default)
-   public function store(Request $request)
-{
-    try {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
-            // Remove role_id validation from user input
-            'status' => 'nullable|in:pending,active,inactive'
-        ]);
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email',
+                'password' => 'required|string|min:6',
+            ]);
 
-        $validated['password'] = Hash::make($validated['password']);
-        $validated['role_id'] = 2;
-        $validated['status'] = 'pending';
+            $validated['password'] = Hash::make($validated['password']);
+            $validated['role_id'] = 2; // default role
+            $validated['status'] = 0; // pending
 
-        $user = User::create($validated);
+            $user = User::create($validated);
 
-        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'created', 'module' => 'users', 'record_id' => $user->id]);
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'created',
+                'module' => 'users',
+                'record_id' => $user->id
+            ]);
 
-        // Generate token if needed
-        $token = $user->createToken('api-token')->plainTextToken;
+            return response()->json([
+                'status' => 201,
+                'message' => 'User created successfully',
+                'data' => $user
+            ], 201);
 
-        return response()->json([
-            'status' => 201,
-            'message' => 'User created successfully',
-            'data' => [
-                'user' => $user,
-                'token' => $token
-            ]
-        ], 201);
-    } catch (\Exception $e) {
-        return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 500,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
-    // Update user (approve, reject, edit info)
+    // Update user info or status
     public function update(Request $request, $id)
     {
         try {
@@ -84,35 +90,44 @@ class UserController extends Controller
 
             $user->update($validated);
 
-            ActivityLog::create(['user_id' => auth()->id(), 'action' => 'updated', 'module' => 'users', 'record_id' => $user->id]);
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'updated',
+                'module' => 'users',
+                'record_id' => $user->id
+            ]);
 
             return response()->json([
                 'status'=>200,
                 'message'=>'User updated successfully',
                 'data'=>$user
             ]);
+
         } catch (\Exception $e) {
             return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
 
-    // Deactivate (set inactive)
     // Permanently remove user
-public function destroy($id)
-{
-    try {
-        $user = User::findOrFail($id);
-        $user->delete();
+    public function destroy($id)
+    {
+        try {
+            $user = User::findOrFail($id);
+            $user->delete();
 
-        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'deleted', 'module' => 'users', 'record_id' => $user->id]);
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'deleted',
+                'module' => 'users',
+                'record_id' => $user->id
+            ]);
 
-        return response()->json([
-            'status' => 200,
-            'message' => 'User removed successfully'
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return response()->json([
+                'status' => 200,
+                'message' => 'User removed successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+        }
     }
-}
-
 }

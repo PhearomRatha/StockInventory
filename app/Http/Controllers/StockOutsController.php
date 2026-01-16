@@ -2,14 +2,56 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Products;
 use App\Models\Stock_outs as StockOut;
 use App\Models\Products as Product;
 use App\Models\Activity_logs as ActivityLog;
+use App\Models\Customers;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class StockOutsController extends Controller
+
 {
+    public function dashboardData()
+{
+    try {
+        $products = Products::select('id','name','price','stock_quantity')->get();
+        $customers = Customers::select('id','name')->get();
+        $users = User::select('id','name')->get();
+        $stockOuts = StockOut::with(['product','customer','soldBy'])
+            ->orderBy('sold_date','desc')
+            ->get()
+            ->map(function($sale){
+                return [
+                    'id' => $sale->id,
+                    'customer_name' => $sale->customer->name ?? '',
+                    'product_name' => $sale->product->name ?? '',
+                    'quantity' => $sale->quantity,
+                    'unit_price' => $sale->unit_price,
+                    'total_amount' => $sale->total_amount,
+                    'sold_date' => $sale->sold_date,
+                    'sold_by' => $sale->soldBy->name ?? '',
+                    'remarks' => $sale->remarks
+                ];
+            });
+
+        return response()->json([
+            'products' => $products,
+            'customers' => $customers,
+            'users' => $users,
+            'stockOuts' => $stockOuts
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 500,
+            'message' => $e->getMessage()
+        ]);
+    }
+}
+
     /**
      * List all stock-out records
      */

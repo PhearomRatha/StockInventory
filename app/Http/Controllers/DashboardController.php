@@ -20,6 +20,33 @@ class DashboardController extends Controller
        DASHBOARD SUMMARY DATA
        ============================ */
 
+       public function index(){
+        try {
+           $totalProduct = $this->totalProduct();
+           $totalCustomer = $this->totalCustomer();
+           $totalSales = $this->totalSales();
+           $totalSupplier = $this->totalSupplier();
+           $totalStockOut = $this->totalStockOut();
+           $totalStockIn = $this->totalStockIn();
+
+
+
+
+           return response()->json([
+            "totalProduct"=>$totalProduct,
+            "totalCustomer"=>$totalCustomer,
+            "totalSales" => $totalSales,
+           "totalSupplier" =>$totalSupplier,
+           "totalStockOut" =>$totalStockOut,
+           "totalStockIn "=>$totalStockIn
+
+           ]);
+
+        } catch (\Exception $th) {
+            return $this->jsonError($th);
+        }
+       }
+
     // Total Products
     public function totalProduct()
     {
@@ -200,132 +227,66 @@ class DashboardController extends Controller
         }
     }
 
-    /* ============================
-       STOCK ALERT & SUMMARY
-       ============================ */
 
-    // Stock Alert
-    public function stockAlert()
-    {
-        try {
-            return Cache::remember('dashboard_stock_alert', 5, function () {
-                $alerts = [];
 
-                $products = Products::all();
+    // /* ============================
+    //    CHART DATA
+    //    ============================ */
 
-                foreach ($products as $product) {
-                    if ($product->stock_quantity == 0) {
-                        $alerts[] = "{$product->name} is OUT OF STOCK";
-                    } elseif ($product->reorder_level && $product->stock_quantity <= ($product->reorder_level * 0.3)) {
-                        $alerts[] = "{$product->name} stock is below 30%";
-                    }
-                }
+    // // Sales Trend Chart Data
+    // public function salesTrend()
+    // {
+    //     try {
+    //         return Cache::remember('dashboard_sales_trend', 20, function () {
+    //             $sales = Sales::select(
+    //                 DB::raw('DATE(created_at) as date'),
+    //                 DB::raw('SUM(total_amount) as total_sales')
+    //             )
+    //             ->groupBy('date')
+    //             ->orderBy('date')
+    //             ->get();
 
-                return response()->json([
-                    'status' => 200,
-                    'alerts' => $alerts
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
+    //             $sales = $sales->map(function ($item) {
+    //                 return [
+    //                     'date' => $item->date,
+    //                     'total_sales' => (float)$item->total_sales
+    //                 ];
+    //             });
 
-    // Stock-In Summary
-    public function stockInSummary()
-    {
-        try {
-            return Cache::remember('dashboard_stock_in_summary', 10, function () {
-                $today = Carbon::today();
+    //             return response()->json([
+    //                 'status' => 200,
+    //                 'message' => 'Sales trend retrieved successfully',
+    //                 'data' => $sales
+    //             ]);
+    //         });
+    //     } catch (\Exception $e) {
+    //         return $this->jsonError($e);
+    //     }
+    // }
 
-                $totalToday = Stock_ins::whereDate('created_at', $today)->sum('quantity');
-                $totalThisMonth = Stock_ins::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->sum('quantity');
-                $totalLastMonth = Stock_ins::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->sum('quantity');
-                $totalYear = Stock_ins::whereBetween('created_at', [
-                    Carbon::now()->startOfYear(),
-                    Carbon::now()
-                ])->sum('quantity');
+    // // Stock Level Chart Data
+    // public function stockLevels()
+    // {
+    //     try {
+    //         return Cache::remember('dashboard_stock_levels', 7, function () {
+    //             $products = Products::select('name as product', 'stock_quantity as stock')->get();
 
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
+    //             $products = $products->map(function ($item) {
+    //                 return [
+    //                     'product' => $item->product,
+    //                     'stock' => (int)$item->stock
+    //                 ];
+    //             });
 
-                return response()->json([
-                    'status' => 200,
-                    'total_today' => $totalToday,
-                    'total_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'total_year' => $totalYear,
-                    'percent_change' => $percentChange,
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    /* ============================
-       CHART DATA
-       ============================ */
-
-    // Sales Trend Chart Data
-    public function salesTrend()
-    {
-        try {
-            return Cache::remember('dashboard_sales_trend', 20, function () {
-                $sales = Sales::select(
-                    DB::raw('DATE(created_at) as date'),
-                    DB::raw('SUM(total_amount) as total_sales')
-                )
-                ->groupBy('date')
-                ->orderBy('date')
-                ->get();
-
-                $sales = $sales->map(function ($item) {
-                    return [
-                        'date' => $item->date,
-                        'total_sales' => (float)$item->total_sales
-                    ];
-                });
-
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Sales trend retrieved successfully',
-                    'data' => $sales
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    // Stock Level Chart Data
-    public function stockLevels()
-    {
-        try {
-            return Cache::remember('dashboard_stock_levels', 7, function () {
-                $products = Products::select('name as product', 'stock_quantity as stock')->get();
-
-                $products = $products->map(function ($item) {
-                    return [
-                        'product' => $item->product,
-                        'stock' => (int)$item->stock
-                    ];
-                });
-
-                return response()->json([
-                    'status' => 200,
-                    'data' => $products
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
+    //             return response()->json([
+    //                 'status' => 200,
+    //                 'data' => $products
+    //             ]);
+    //         });
+    //     } catch (\Exception $e) {
+    //         return $this->jsonError($e);
+    //     }
+    // }
 
     /* ============================
        HELPER FUNCTIONS

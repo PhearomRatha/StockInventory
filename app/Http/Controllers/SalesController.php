@@ -38,6 +38,10 @@ class SalesController extends Controller
             $items      = $request->items;
             $paymentMethod = $request->payment_method;
 
+            // Fetch all products at once to reduce queries
+            $productIds = collect($items)->pluck('product_id')->unique();
+            $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
+
             // -----------------------------
             // Calculate total amount & check stock
             // -----------------------------
@@ -73,6 +77,8 @@ class SalesController extends Controller
             // -----------------------------
             // Create sale items (without reducing stock yet)
             // -----------------------------
+            $saleItemsData = [];
+            $now = now();
             foreach ($items as $item) {
                 $product = Product::find($item['product_id']);
                 $discountPercent = $item['discount_percent'] ?? 0;
@@ -81,15 +87,18 @@ class SalesController extends Controller
                 $discountAmount = $itemTotal * ($discountPercent / 100);
                 $finalTotal = $itemTotal - $discountAmount;
 
-                SaleItem::create([
+                $saleItemsData[] = [
                     'sale_id' => $sale->id,
                     'product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $unitPrice,
                     'discount' => $discountAmount,
-                    'total' => $finalTotal
-                ]);
+                    'total' => $finalTotal,
+                    'created_at' => $now,
+                    'updated_at' => $now
+                ];
             }
+            SaleItem::insert($saleItemsData);
 
             // -----------------------------
             // Generate invoice number

@@ -2,189 +2,172 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Activity_logs;
 use Illuminate\Http\Request;
-use App\Models\Stock_ins as StockIn;
-use App\Models\Products as Product;
-use App\Models\Suppliers as Supplier;
-use App\Models\Activity_logs as ActivityLog;
+use App\Models\StockIn;
+use App\Models\Product;
+use App\Models\Supplier;
+use App\Models\ActivityLog;
+use App\Models\Products;
+use App\Models\Stock_ins;
+use App\Models\Suppliers;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 
 class StockInsController extends Controller
 {
     /**
-     * Get total stock-in quantity and total money
+     * Get all necessary data for Stock In Page in one request
      */
-    public function totalStockIn()
+    public function overview()
     {
         try {
-            return Cache::remember('stock_ins_total', 10, function () {
-                $totalQuantity = StockIn::sum('quantity');
-                $totalMoney = StockIn::sum(DB::raw('quantity * unit_cost'));
-
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Stock-in summary retrieved successfully',
-                    'total_quantity' => $totalQuantity,
-                    'total_money' => $totalMoney
-                ]);
-            });
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 500,
-                'message' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * List all stock-in records with optional filters
-     */
-    public function index(Request $request)
-{
-    try {
-        $cacheKey = 'stock_ins_list_' . md5(serialize($request->all()));
-        return Cache::remember($cacheKey, 5, function () use ($request) {
-            // Eager load product, supplier, and receivedBy relationships
-            $query = StockIn::with(['product', 'supplier', 'receivedBy']);
-
-            if ($request->has('supplier_id')) {
-                $query->where('supplier_id', $request->supplier_id);
-            }
-            if ($request->has('product_id')) {
-                $query->where('product_id', $request->product_id);
-            }
-            if ($request->has('received_date')) {
-                $query->whereDate('received_date', $request->received_date);
-            }
-
-            $stockIns = $query->latest('received_date')->get();
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Stock In records fetched successfully',
-                'data' => $stockIns->map(function ($item) {
+            // Eager load relationships and flatten for frontend
+            $stockIns = Stock_ins::with(['product', 'supplier', 'receivedBy'])
+                ->orderByDesc('id')
+                ->get()
+                ->map(function ($item) {
                     return [
                         'id' => $item->id,
                         'stock_in_code' => $item->stock_in_code,
-                        'product' => $item->product->name ?? '',
-                        'supplier' => $item->supplier->name ?? '',
+                        'product_id' => $item->product_id,
+                        'product_name' => $item->product->name ?? '',
+                        'supplier_id' => $item->supplier_id,
+                        'supplier_name' => $item->supplier->name ?? '',
                         'quantity' => $item->quantity,
-                        'unit_cost' => $item->unit_cost,
-                        'total_cost' => $item->total_cost,
-                        'received_date' => $item->received_date,
-                        'received_by' => $item->receivedBy->name ?? '', // use the relationship
+                        'unit_cost' => (float) $item->unit_cost,
+                        'total_cost' => (float) $item->total_cost,
+                        'received_date' => $item->date,
+                        'received_by_id' => $item->received_by,
+                        'received_by_name' => $item->receivedBy->name ?? '',
+                        'remarks' => $item->remarks ?? '',
                     ];
-                }),
+                });
+
+            $suppliers = Suppliers::select('id', 'name')->get();
+            $products  = Products::select('id', 'name', 'stock_quantity')->get();
+            $users     = DB::table('users')->select('id', 'name')->get();
+
+            return response()->json([
+                'status' => 200,
+                'message' => 'Stock In overview loaded successfully',
+                'stock_history' => $stockIns,
+                'suppliers' => $suppliers,
+                'products' => $products,
+                'users' => $users
             ]);
-        });
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'message' => $e->getMessage(),
-        ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 500,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
      * Store new stock-in record
      */
     public function store(Request $request)
-{
-    try {
-        $validated = $request->validate([
-            'supplier_id' => 'required|exists:suppliers,id',
-            'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|integer|min:1',
-            'unit_cost' => 'required|numeric|min:0',
-            'date' => 'required|date',
-            'received_by' => 'required|exists:users,id',
-            'remarks' => 'nullable|string'
-        ]);
+    {
+        try {
+            $validated = $request->validate([
+                'supplier_id' => 'required|exists:suppliers,id',
+                'product_id' => 'required|exists:products,id',
+                'quantity' => 'required|integer|min:1',
+                'unit_cost' => 'required|numeric|min:0',
+                'date' => 'required|date',
+                'received_by' => 'required|exists:users,id',
+                'remarks' => 'nullable|string'
+            ]);
 
-        // Add auto ID and total
-        $validated['stock_in_code'] = 'SI-' . substr(time(), -5);
-        $validated['total_cost'] = $validated['quantity'] * $validated['unit_cost'];
+            // Calculate total cost
+            $validated['stock_in_code'] = 'SI-' . substr(time(), -5);
+            $validated['total_cost'] = $validated['quantity'] * $validated['unit_cost'];
 
-        // Create StockIn record
-        $stockIn = StockIn::create($validated);
+            $stockIn = Stock_ins::create($validated);
 
-        // Update product stock quantity
-        $product = Product::find($validated['product_id']);
-        $product->stock_quantity += $validated['quantity'];
-        $product->save();
+            // Update product stock
+            $product = Products::find($validated['product_id']);
+            $product->stock_quantity += $validated['quantity'];
+            $product->save();
 
-        ActivityLog::create(['user_id' => auth()->id(), 'action' => 'created', 'module' => 'stock_ins', 'record_id' => $stockIn->id]);
+            // Log activity
+            Activity_logs::create([
+                'user_id' => auth()->id() ?? $validated['received_by'],
+                'action' => 'created',
+                'module' => 'stock_ins',
+                'record_id' => $stockIn->id
+            ]);
 
-        // Prepare flattened data for frontend
-        $responseData = [
-            'id' => $stockIn->id,
-            'stock_in_code' => $stockIn->stock_in_code,
-            'product' => $product->name,
-            'supplier' => $stockIn->supplier->name ?? '',
-            'quantity' => $stockIn->quantity,
-            'unit_cost' => $stockIn->unit_cost,
-            'total_cost' => $stockIn->total_cost,
-            'received_date' => $stockIn->date,
-            'remarks' => $stockIn->remarks,
-        ];
-
-        return response()->json([
-            'status' => 201,
-            'message' => 'Stock in recorded successfully',
-            'data' => $responseData
-        ], 201);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 500,
-            'message' => $e->getMessage()
-        ], 500);
+            // Return flattened JSON for frontend
+            return response()->json([
+                'status' => 201,
+                'message' => 'Stock In recorded successfully',
+                'data' => [
+                    'id' => $stockIn->id,
+                    'stock_in_code' => $stockIn->stock_in_code,
+                    'product' => $product->name,
+                    'supplier' => $stockIn->supplier->name ?? '',
+                    'quantity' => $stockIn->quantity,
+                    'unit_cost' => (float) $stockIn->unit_cost,
+                    'total_cost' => (float) $stockIn->total_cost,
+                    'received_date' => $stockIn->date,
+                    'received_by' => $stockIn->receivedBy->name ?? '',
+                    'remarks' => $stockIn->remarks ?? ''
+                ]
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 500,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
-     * Update existing stock-in record
+     * Update stock-in record
      */
     public function update(Request $request, $id)
     {
         try {
-            $stockIn = StockIn::findOrFail($id);
+            $stockIn = Stock_ins::findOrFail($id);
 
             $validated = $request->validate([
                 'supplier_id' => 'sometimes|required|exists:suppliers,id',
                 'product_id' => 'sometimes|required|exists:products,id',
                 'quantity' => 'sometimes|required|integer|min:1',
                 'unit_cost' => 'sometimes|required|numeric|min:0',
-                'total_cost' => 'sometimes|numeric|min:0',
                 'date' => 'sometimes|required|date',
                 'received_by' => 'sometimes|required|exists:users,id',
                 'remarks' => 'nullable|string'
             ]);
 
-            // Adjust stock if quantity changes
+            // Adjust product stock if quantity changes
             if (isset($validated['quantity'])) {
-                $product = Product::find($stockIn->product_id);
-                $product->stock_quantity -= $stockIn->quantity; // remove old
-                $product->stock_quantity += $validated['quantity']; // add new
+                $product = Products::find($stockIn->product_id);
+                $product->stock_quantity -= $stockIn->quantity;
+                $product->stock_quantity += $validated['quantity'];
                 $product->save();
             }
 
-            // Update stock in record
             $stockIn->update($validated);
 
-            ActivityLog::create(['user_id' => auth()->id(), 'action' => 'updated', 'module' => 'stock_ins', 'record_id' => $stockIn->id]);
+            Activity_logs::create([
+                'user_id' => auth()->id(),
+                'action' => 'updated',
+                'module' => 'stock_ins',
+                'record_id' => $stockIn->id
+            ]);
 
             return response()->json([
                 'status' => 200,
-                'message' => 'Stock in updated successfully',
+                'message' => 'Stock In updated successfully',
                 'data' => $stockIn
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'status' => 500,
                 'message' => $e->getMessage()
-            ]);
+            ], 500);
         }
     }
 
@@ -194,26 +177,30 @@ class StockInsController extends Controller
     public function destroy($id)
     {
         try {
-            $stockIn = StockIn::findOrFail($id);
+            $stockIn = Stock_ins::findOrFail($id);
 
-            // Decrease product stock
-            $product = Product::find($stockIn->product_id);
+            $product = Products::find($stockIn->product_id);
             $product->stock_quantity -= $stockIn->quantity;
             $product->save();
 
             $stockIn->delete();
 
-            ActivityLog::create(['user_id' => auth()->id(), 'action' => 'deleted', 'module' => 'stock_ins', 'record_id' => $stockIn->id]);
+            Activity_logs::create([
+                'user_id' => auth()->id(),
+                'action' => 'deleted',
+                'module' => 'stock_ins',
+                'record_id' => $stockIn->id
+            ]);
 
             return response()->json([
                 'status' => 200,
-                'message' => 'Stock in deleted successfully'
+                'message' => 'Stock In deleted successfully'
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json([
                 'status' => 500,
                 'message' => $e->getMessage()
-            ]);
+            ], 500);
         }
     }
 }
