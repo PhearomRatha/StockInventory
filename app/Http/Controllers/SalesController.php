@@ -171,7 +171,7 @@ class SalesController extends Controller
                 merchantName: "RA THA Phearom",
                 merchantCity: "Phnom Penh",
                 currency: KHQRData::CURRENCY_KHR,
-                amount: $totalAmount,
+                amount: (int) round($totalAmount),
                 billNumber: $invoiceId
             );
 
