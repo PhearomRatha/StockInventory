@@ -219,7 +219,9 @@ class SalesController extends Controller
     // -----------------------------
     // Verify Bakong payment
     // -----------------------------
-    public function verifySalePayment(Request $request)
+   
+
+public function verifySalePayment(Request $request)
 {
     $request->validate([
         'sale_id' => 'required|exists:sales,id',
@@ -230,7 +232,7 @@ class SalesController extends Controller
         $sale = Sale::findOrFail($request->sale_id);
 
         // -----------------------------
-        // Step 1: Renew Bakong token dynamically
+        // Step 1: Renew Bakong token (sandbox)
         // -----------------------------
         $tokenResponse = Http::timeout(30)->post(env('BAKONG_API_URL') . '/renew_token', [
             'email' => env('BAKONG_EMAIL')
@@ -320,7 +322,6 @@ class SalesController extends Controller
         ], 500);
     }
 }
-
 
 
 
