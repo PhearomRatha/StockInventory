@@ -225,17 +225,17 @@ class SalesController extends Controller
             'md5'     => 'required|string'
         ]);
 
-        $sale = Sale::findOrFail($request->sale_id);
-        $bakongToken = env('MY_BAKONG_TOKEN');
-
-        if (!$bakongToken) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Bakong configuration missing.'
-            ], 500);
-        }
-
         try {
+            $sale = Sale::findOrFail($request->sale_id);
+            $bakongToken = env('MY_BAKONG_TOKEN');
+
+            if (!$bakongToken) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Bakong configuration missing.'
+                ], 500);
+            }
+
             $khqr = new BakongKHQR($bakongToken);
             $verify = $khqr->checkTransactionByMD5($request->md5);
 
@@ -296,7 +296,7 @@ class SalesController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
-                'message' => 'Failed to verify with Bakong API',
+                'message' => 'Failed to verify payment',
                 'error' => $e->getMessage()
             ], 500);
         }
