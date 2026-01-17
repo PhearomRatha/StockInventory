@@ -15,8 +15,7 @@ class UserController extends Controller
         try {
             // Select only needed fields + eager load role
             $users = User::select('id', 'name', 'email', 'status', 'role_id')
-                ->with(['role:id,name'])
-                ->paginate(5);
+                ->with(['role:id,name'])->get();
 
             return response()->json([
                 'status' => 200,
