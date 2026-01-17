@@ -156,7 +156,7 @@ class SalesController extends Controller
             // Handle Bakong payment (generate QR)
             // -----------------------------
             $bakongAccount = env('BAKONG_ACCOUNT');
-            $bakongToken   = env('MY_BAKONG_TOKEN');
+            $bakongToken = $this->renewBakongToken();
 
             if (!$bakongAccount || !$bakongToken) {
                 DB::rollBack();
@@ -219,7 +219,7 @@ class SalesController extends Controller
     // -----------------------------
     // Verify Bakong payment
     // -----------------------------
-   public function verifySalePayment(Request $request)
+    public function verifySalePayment(Request $request)
 {
     $request->validate([
         'sale_id' => 'required|exists:sales,id',
@@ -229,32 +229,48 @@ class SalesController extends Controller
     try {
         $sale = Sale::findOrFail($request->sale_id);
 
-        // Step 1: Renew token dynamically (recommended)
-        $token = $this->renewBakongToken(); // create this helper function
+        // -----------------------------
+        // Step 1: Renew Bakong token dynamically
+        // -----------------------------
+        $tokenResponse = Http::timeout(30)->post(env('BAKONG_API_URL') . '/renew_token', [
+            'email' => env('BAKONG_EMAIL')
+        ]);
 
-        if (!$token) {
+        if (!$tokenResponse->successful() || empty($tokenResponse['data']['token'])) {
             return response()->json([
                 'status' => false,
-                'message' => 'Failed to get Bakong token.'
+                'message' => 'Failed to get Bakong token from sandbox',
+                'bakong_response' => $tokenResponse->body()
             ], 500);
         }
 
-        // Step 2: Verify transaction
-        $khqr = new BakongKHQR($token);
-        $verify = $khqr->checkTransactionByMD5($request->md5);
+        $token = $tokenResponse['data']['token'];
 
-        $verifyArray = is_array($verify) ? $verify : (array)$verify;
-        $data = $verifyArray['data'] ?? null;
+        // -----------------------------
+        // Step 2: Verify transaction by MD5
+        // -----------------------------
+        $verifyResponse = Http::timeout(30)->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json'
+        ])->post(env('BAKONG_API_URL') . '/check_transaction_by_md5', [
+            'md5' => $request->md5
+        ]);
 
-        if (($verifyArray['responseCode'] ?? 1) !== 0 || empty($data['acknowledgedDateMs'])) {
+        $verify = $verifyResponse->json();
+
+        if (($verify['responseCode'] ?? 1) !== 0 || empty($verify['data']['acknowledgedDateMs'])) {
             return response()->json([
                 'status' => false,
                 'message' => 'Payment NOT successful or not found in Bakong',
-                'bakong' => $verifyArray
+                'bakong' => $verify
             ], 400);
         }
 
+        $data = $verify['data'];
+
+        // -----------------------------
         // Step 3: Update sale and stock
+        // -----------------------------
         if ($sale->payment_status !== 'paid') {
             $sale->update([
                 'status' => 'paid',
@@ -304,6 +320,7 @@ class SalesController extends Controller
         ], 500);
     }
 }
+
 
 
 
