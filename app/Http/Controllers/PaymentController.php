@@ -60,9 +60,7 @@ class PaymentController extends Controller
         });
     }
 
-    // -----------------------------
-    // Checkout payment via Bakong (like multi-item/multi-sale)
-    // -----------------------------
+   
     public function checkoutPayment(Request $request)
     {
         $request->validate([
@@ -145,6 +143,14 @@ class PaymentController extends Controller
 
         $qrResponse = (new BakongKHQR($bakongToken))->generateIndividual($individualInfo);
 
+        // Save md5 to payments
+        $md5 = $qrResponse->data['md5'] ?? null;
+        if($md5){
+            foreach($payments as $payment){
+                $payment->update(['md5'=>$md5]);
+            }
+        }
+
         foreach($payments as $payment){
             ActivityLog::create([
                 'user_id' => auth()->id(),
@@ -159,14 +165,13 @@ class PaymentController extends Controller
             'payments'=>$payments,
             'total_amount'=>$totalAmount,
             'qr_string'=>$qrResponse->data['qr'] ?? null,
-            'md5'=>$qrResponse->data['md5'] ?? null,
+            'md5'=>$md5,
             'payment_method'=>'Bakong'
         ]);
     }
 
-    // -----------------------------
     // Verify Bakong payment and update records
-    // -----------------------------
+
     public function verifyPayment(Request $request)
     {
         $request->validate(['md5'=>'required|string']);
@@ -181,14 +186,12 @@ class PaymentController extends Controller
 
         $khqr = new BakongKHQR($bakongToken);
         $verify = $khqr->checkTransactionByMD5($request->md5);
-        $verifyArray = is_array($verify)?$verify:(array)$verify;
-        $data = $verifyArray['data'] ?? [];
 
-        if(($verifyArray['responseCode'] ?? 1) !==0 || empty($data['acknowledgedDateMs'])){
+        if(!isset($verify['status']) || !$verify['status'] || empty($verify['data']['acknowledgedDateMs'] ?? null)){
             return response()->json([
                 'status'=>false,
                 'message'=>'Payment not found or unsuccessful',
-                'bakong'=>$verifyArray
+                'bakong'=>$verify
             ],400);
         }
 
@@ -197,7 +200,7 @@ class PaymentController extends Controller
         if($payment && $payment->status!='paid'){
             $payment->update([
                 'status'=>'paid',
-                'bill_number'=>$data['externalRef'] ?? $payment->bill_number
+                'bill_number'=>$verify['data']['externalRef'] ?? $payment->bill_number
             ]);
 
             // If sale, update sale status too
@@ -218,7 +221,7 @@ class PaymentController extends Controller
             'status'=>true,
             'message'=>'Payment verified successfully',
             'payment'=>$payment,
-            'bakong'=>$data
+            'bakong'=>$verify['data']
         ]);
     }
 

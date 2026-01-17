@@ -76,11 +76,11 @@ class UserController extends Controller
             $user = User::findOrFail($id);
 
             $validated = $request->validate([
-                'name'=>'sometimes|required|string|max:255',
-                'email'=>'sometimes|required|email|unique:users,email,'.$id,
+                'name'=>'sometimes|string|max:255',
+                'email'=>'sometimes|email|unique:users,email,'.$id,
                 'password'=>'sometimes|nullable|string|min:6',
-                'role_id'=>'sometimes|required|exists:roles,id',
-                'status'=>'sometimes|required|integer|in:0,1,2'
+                'role_id'=>'sometimes|exists:roles,id',
+                'status'=>'sometimes|integer|in:0,1,2'
             ]);
 
             if(isset($validated['password'])){

@@ -19,7 +19,8 @@ class Payments extends Model
         'payment_date',
         'bill_number',
         'recorded_by',
-        'status'
+        'status',
+        'md5'
     ];
       public function reference() {
         return $this->morphTo(); // can belong to Sale or StockIn
