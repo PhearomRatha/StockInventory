@@ -18,7 +18,8 @@ protected $fillable = [
     'discount',
     'payment_status',
     'payment_method',
-    'status'
+    'status',
+    'md5'
 ];
 
     public function stockOuts() {

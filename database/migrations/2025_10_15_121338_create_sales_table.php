@@ -19,6 +19,7 @@ return new class extends Migration
     $table->decimal('discount', 10, 2)->default(0);
     $table->enum('payment_status', ['paid','unpaid','partial'])->default('unpaid');
     $table->string('payment_method')->nullable();
+    $table->string('md5')->nullable();
     $table->foreignId('sold_by')->constrained('users');
     $table->timestamps();
 });

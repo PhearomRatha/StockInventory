@@ -16,7 +16,7 @@ class UserController extends Controller
             // Select only needed fields + eager load role
             $users = User::select('id', 'name', 'email', 'status', 'role_id')
                 ->with(['role:id,name'])
-                ->paginate(12);
+                ->paginate(5);
 
             return response()->json([
                 'status' => 200,
@@ -47,12 +47,14 @@ class UserController extends Controller
 
             $user = User::create($validated);
 
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'created',
-                'module' => 'users',
-                'record_id' => $user->id
-            ]);
+            if (auth()->id()) {
+                ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'created',
+                    'module' => 'users',
+                    'record_id' => $user->id
+                ]);
+            }
 
             return response()->json([
                 'status' => 201,
@@ -90,12 +92,14 @@ class UserController extends Controller
 
             $user->update($validated);
 
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'updated',
-                'module' => 'users',
-                'record_id' => $user->id
-            ]);
+            if (auth()->id()) {
+                ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'updated',
+                    'module' => 'users',
+                    'record_id' => $user->id
+                ]);
+            }
 
             return response()->json([
                 'status'=>200,
@@ -115,12 +119,14 @@ class UserController extends Controller
             $user = User::findOrFail($id);
             $user->delete();
 
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'deleted',
-                'module' => 'users',
-                'record_id' => $user->id
-            ]);
+            if (auth()->id()) {
+                ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'deleted',
+                    'module' => 'users',
+                    'record_id' => $user->id
+                ]);
+            }
 
             return response()->json([
                 'status' => 200,

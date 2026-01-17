@@ -49,7 +49,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:Admin')->controller(UserController::class)->group(function () {
         Route::get('/users', 'index');
          Route::post('/users', [UserController::class, 'store']);
-        Route::put('/users/{id}', 'update');
+        Route::post('/users/{id}', 'update');
         Route::delete('/users/{id}', 'destroy');
     });
 
@@ -147,6 +147,7 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/sales/dashboard', 'dashboard');
         Route::post('/sales/checkout', 'checkoutSale');
         Route::post('/sales/verify-payment', 'verifySalePayment');
+        Route::get('/sales/data', 'getSalesData');
     });
 
     // ---------------------- PAYMENTS ----------------------
@@ -181,13 +182,4 @@ Route::middleware('role:Admin')->controller(ActivityLogsController::class)->grou
 
 });
 
-Route::get('/test-bakong', function() {
-    $response = Http::withHeaders([
-        'Authorization' => 'Bearer ' . env('MY_BAKONG_TOKEN'),
-        'Content-Type' => 'application/json'
-    ])->post(env('BAKONG_API_URL') . '/verify', [
-        'transaction_id' => 'YOUR_TEST_TX_ID'
-    ]);
 
-    return $response->body();
-});
