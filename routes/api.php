@@ -16,6 +16,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 /*
 |--------------------------------------------------------------------------
@@ -178,4 +179,15 @@ Route::middleware('role:Admin')->controller(ActivityLogsController::class)->grou
 });
 
 
+});
+
+Route::get('/test-bakong', function() {
+    $response = Http::withHeaders([
+        'Authorization' => 'Bearer ' . env('MY_BAKONG_TOKEN'),
+        'Content-Type' => 'application/json'
+    ])->post(env('BAKONG_API_URL') . '/verify', [
+        'transaction_id' => 'YOUR_TEST_TX_ID'
+    ]);
+
+    return $response->body();
 });

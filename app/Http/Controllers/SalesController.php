@@ -10,6 +10,7 @@ use App\Models\Products as Product;
 use App\Models\SaleItem;
 use App\Models\Payments as Payment;
 use App\Models\Activity_logs as ActivityLog;
+use Illuminate\Support\Facades\Http;
 use KHQR\BakongKHQR;
 use KHQR\Helpers\KHQRData;
 use KHQR\Models\IndividualInfo;
@@ -218,89 +219,93 @@ class SalesController extends Controller
     // -----------------------------
     // Verify Bakong payment
     // -----------------------------
-    public function verifySalePayment(Request $request)
-    {
-        $request->validate([
-            'sale_id' => 'required|exists:sales,id',
-            'md5'     => 'required|string'
-        ]);
+   public function verifySalePayment(Request $request)
+{
+    $request->validate([
+        'sale_id' => 'required|exists:sales,id',
+        'md5'     => 'required|string'
+    ]);
 
-        try {
-            $sale = Sale::findOrFail($request->sale_id);
-            $bakongToken = env('MY_BAKONG_TOKEN');
+    try {
+        $sale = Sale::findOrFail($request->sale_id);
 
-            if (!$bakongToken) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Bakong configuration missing.'
-                ], 500);
-            }
+        // Step 1: Renew token dynamically (recommended)
+        $token = $this->renewBakongToken(); // create this helper function
 
-            $khqr = new BakongKHQR($bakongToken);
-            $verify = $khqr->checkTransactionByMD5($request->md5);
-
-            $verifyArray = is_array($verify) ? $verify : (array)$verify;
-            $data = $verifyArray['data'] ?? [];
-
-            if (($verifyArray['responseCode'] ?? 1) !== 0 || empty($data['acknowledgedDateMs'])) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Payment NOT successful or not found in Bakong',
-                    'bakong' => $verifyArray
-                ], 400);
-            }
-
-            // Update sale as paid
-            if ($sale->payment_status !== 'paid') {
-                $sale->update([
-                    'status' => 'paid',
-                    'payment_status' => 'paid'
-                ]);
-
-                // Reduce stock for each item
-                foreach ($sale->saleItems as $item) {
-                    $product = Product::find($item->product_id);
-                    if ($product) {
-                        $product->stock_quantity -= $item->quantity;
-                        $product->save();
-                    }
-                }
-
-                Payment::create([
-                    'reference_type' => 'sale',
-                    'reference_id' => $sale->id,
-                    'amount' => $sale->total_amount,
-                    'payment_type' => 'income',
-                    'payment_method' => 'Bakong',
-                    'paid_to_from' => env('BAKONG_ACCOUNT'),
-                    'payment_date' => now(),
-                    'bill_number' => $sale->invoice_number,
-                    'recorded_by' => auth()->id()
-                ]);
-
-                ActivityLog::create([
-                    'user_id' => auth()->id(),
-                    'action' => 'verified',
-                    'module' => 'sales_payment',
-                    'record_id' => $sale->id
-                ]);
-            }
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment verified successfully',
-                'sale' => $sale,
-                'bakong' => $data
-            ]);
-
-        } catch (\Exception $e) {
+        if (!$token) {
             return response()->json([
                 'status' => false,
-                'message' => 'Failed to verify payment',
-                'error' => $e->getMessage()
+                'message' => 'Failed to get Bakong token.'
             ], 500);
         }
+
+        // Step 2: Verify transaction
+        $khqr = new BakongKHQR($token);
+        $verify = $khqr->checkTransactionByMD5($request->md5);
+
+        $verifyArray = is_array($verify) ? $verify : (array)$verify;
+        $data = $verifyArray['data'] ?? null;
+
+        if (($verifyArray['responseCode'] ?? 1) !== 0 || empty($data['acknowledgedDateMs'])) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Payment NOT successful or not found in Bakong',
+                'bakong' => $verifyArray
+            ], 400);
+        }
+
+        // Step 3: Update sale and stock
+        if ($sale->payment_status !== 'paid') {
+            $sale->update([
+                'status' => 'paid',
+                'payment_status' => 'paid'
+            ]);
+
+            foreach ($sale->saleItems as $item) {
+                $product = Product::find($item->product_id);
+                if ($product) {
+                    $product->stock_quantity -= $item->quantity;
+                    $product->save();
+                }
+            }
+
+            Payment::create([
+                'reference_type' => 'sale',
+                'reference_id' => $sale->id,
+                'amount' => $sale->total_amount,
+                'payment_type' => 'income',
+                'payment_method' => 'Bakong',
+                'paid_to_from' => env('BAKONG_ACCOUNT'),
+                'payment_date' => now(),
+                'bill_number' => $sale->invoice_number,
+                'recorded_by' => auth()->id()
+            ]);
+
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'verified',
+                'module' => 'sales_payment',
+                'record_id' => $sale->id
+            ]);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Payment verified successfully',
+            'sale' => $sale,
+            'bakong' => $data
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to verify payment',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
+
 
     // -----------------------------
     // List all sales
@@ -426,4 +431,17 @@ class SalesController extends Controller
             return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
+    // Helper function to renew token
+private function renewBakongToken()
+{
+    $email = env('BAKONG_EMAIL'); // registered email
+    $baseUrl = env('BAKONG_BASE_URL');
+
+    $response = Http::post($baseUrl . '/v1/renew_token', [
+        'email' => $email
+    ]);
+
+    $res = $response->json();
+    return $res['data']['token'] ?? null;
+}
 }
