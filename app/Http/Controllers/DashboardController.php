@@ -228,12 +228,6 @@ class DashboardController extends Controller
     }
 
 
-
-    // /* ============================
-    //    CHART DATA
-    //    ============================ */
-
-    // // Sales Trend Chart Data
     // public function salesTrend()
     // {
     //     try {

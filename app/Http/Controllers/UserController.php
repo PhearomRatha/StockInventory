@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Activity_logs as ActivityLog;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class UserController extends Controller
 {
@@ -112,25 +114,58 @@ class UserController extends Controller
     }
 
     // Permanently remove user
-    public function destroy($id)
+  // Soft delete by changing status
+public function destroy($id)
+{
+    try {
+        $user = User::findOrFail($id);
+
+        // Change status instead of deleting
+        $user->status = 2; // 2 = deleted/disabled
+        $user->save();
+
+        // Log the action
+        if (auth()->id()) {
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'disabled', // instead of 'deleted'
+                'module' => 'users',
+                'record_id' => $user->id
+            ]);
+        }
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'User disabled successfully',
+            'data' => $user
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 500,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+
+    // Get total users by role
+    public function totalUsers()
     {
         try {
-            $user = User::findOrFail($id);
-            $user->delete();
+            return Cache::remember('total_users_by_role', 10, function () {
+                $usersByRole = User::join('roles', 'users.role_id', '=', 'roles.id')
+                    ->select('roles.name as role', DB::raw('count(*) as count'))
+                    ->groupBy('roles.name')
+                    ->pluck('count', 'role');
 
-            if (auth()->id()) {
-                ActivityLog::create([
-                    'user_id' => auth()->id(),
-                    'action' => 'deleted',
-                    'module' => 'users',
-                    'record_id' => $user->id
+                return response()->json([
+                    'status' => 200,
+                    'total_admin' => $usersByRole['admin'] ?? 0,
+                    'total_manager' => $usersByRole['manager'] ?? 0,
+                    'total_staff' => $usersByRole['staff'] ?? 0,
+                    'total_users' => $usersByRole->sum()
                 ]);
-            }
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'User removed successfully'
-            ]);
+            });
         } catch (\Exception $e) {
             return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
         }

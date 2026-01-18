@@ -191,7 +191,7 @@ class ReportController extends Controller
             $totalStockValue = $stockData->sum('stock_value');
             $lowStockProducts = $stockData->where('low_stock', true);
 
-            $totalInStock = $stockData->where('message', 'In Stock')->count();
+            $totalInStock = $stockData->where('messsage', 'In Stock')->count();
             $totalLowStock = $stockData->whereIn('message', ['Low Stock', 'Very Low Stock'])->count();
             $totalOutOfStock = $stockData->where('message', 'Out-of-Stock')->count();
 

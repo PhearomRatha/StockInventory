@@ -60,16 +60,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // ---------------------- DASHBOARD ----------------------
 Route::prefix('dashboard')->group(function () {
-    // Route::get('/total-customers', [DashboardController::class, 'totalCustomer'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/total-products', [DashboardController::class, 'totalProduct'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/total-suppliers', [DashboardController::class, 'totalSupplier'])->middleware('role:Admin,Manager');
-    // Route::get('/total-sales', [DashboardController::class, 'totalSales'])->middleware('role:Admin,Manager');
-    // Route::get('/total-stockin', [DashboardController::class, 'totalStockIn'])->middleware('role:Admin,Manager,Staff');
+
     Route::get('/index', [DashboardController::class, 'index'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/stockin-summary', [DashboardController::class, 'stockInSummary'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/stock-alert', [DashboardController::class, 'stockAlert'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/sales-trend', [DashboardController::class, 'salesTrend'])->middleware('role:Admin,Manager,Staff');
-    // Route::get('/stock-levels', [DashboardController::class, 'stockLevels'])->middleware('role:Admin,Manager,Staff');
+
 });
 
     // ---------------------- ROLES ----------------------
