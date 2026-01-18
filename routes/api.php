@@ -75,7 +75,14 @@ Route::prefix('dashboard')->group(function () {
     });
 
     // ---------------------- PRODUCTS ----------------------
-    Route::middleware('role:Admin,Manager,Staff')->controller(ProductController::class)->group(function () {
+    Route::middleware('role:Staff')->controller(ProductController::class)->group(function () {
+        Route::get('/products', 'index');
+        Route::get('/products/{id}', 'show');
+        Route::post('/products', 'store');
+        Route::get('/products/total', 'totalPro');
+        Route::get('/products/stock-status', 'stock');
+    });
+        Route::middleware('role:Admin,Manager')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
         Route::get('/products/{id}', 'show');
         Route::post('/products', 'store');

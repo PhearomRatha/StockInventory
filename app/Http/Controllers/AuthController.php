@@ -59,8 +59,11 @@ class AuthController extends Controller
             if ($user->status != 1) {
                 return response()->json(['status' => 403, 'message' => 'Your account is not yet approved by admin.'], 403);
             }
+            // access token : 
+            // refresh token
 
-            $token = $user->createToken('api-token')->plainTextToken;
+
+            $token = $user->createToken('email')->plainTextToken;
 
             return response()->json([
                 'status' => 200,

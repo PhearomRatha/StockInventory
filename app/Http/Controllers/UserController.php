@@ -11,22 +11,28 @@ use Illuminate\Support\Facades\Hash;
 class UserController extends Controller
 {
     // Get all users with role
-    public function index()
-    {
-        try {
-            $users = User::select('id', 'name', 'email', 'status', 'role_id')
-                ->with(['role:id,name'])
-                ->get();
+public function index()
+{
+    try {
+        $users = User::select('id', 'name', 'email', 'status', 'role_id')
+            ->with(['role:id,name'])
+            ->paginate(8);
 
-            return response()->json([
-                'status'  => 200,
-                'message' => 'Users retrieved successfully',
-                'data'    => $users,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
-        }
+  
+
+        return response()->json([
+            'status'  => 200,
+            'message' => 'Users retrieved successfully',
+            'data'    => $users,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 500,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
+
 
     // Create new user (pending by default)
     public function store(Request $request)
