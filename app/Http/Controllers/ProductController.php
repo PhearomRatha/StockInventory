@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Products as Product;
-use App\Models\Activity_logs as ActivityLog;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use App\Helpers\ResponseHelper;
+use App\Helpers\ActivityLogHelper;
+use App\Helpers\ImageHelper;
+use App\Helpers\CacheHelper;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
@@ -17,16 +17,12 @@ class ProductController extends Controller
     public function totalPro()
     {
         try {
-            return Cache::remember('products_total', 10, function () {
+            return CacheHelper::remember(CacheHelper::productsTotalKey(), 10, function () {
                 $total = Product::count();
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Total products retrieved successfully',
-                    'total_products' => $total
-                ]);
+                return ResponseHelper::success('Total products retrieved successfully', ['total_products' => $total]);
             });
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()]);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
@@ -36,7 +32,7 @@ class ProductController extends Controller
     public function stock()
     {
         try {
-            return Cache::remember('products_stock_status', 5, function () {
+            return CacheHelper::remember(CacheHelper::productsStockKey(), 5, function () {
                 $products = Product::all();
                 $lowStock = [];
                 $outOfStock = [];
@@ -49,7 +45,7 @@ class ProductController extends Controller
                             'stock_quantity' => $product->stock_quantity,
                             'status' => 'Out of Stock'
                         ];
-                    } elseif ($product->reorder_level && $product->stock_quantity <= ($product->reorder_level * 0.3)) {
+                    } elseif ($product->is_low_stock) {
                         $lowStock[] = [
                             'id' => $product->id,
                             'name' => $product->name,
@@ -59,33 +55,31 @@ class ProductController extends Controller
                     }
                 }
 
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Stock status retrieved successfully',
+                return ResponseHelper::success('Stock status retrieved successfully', [
                     'low_stock' => $lowStock,
                     'out_of_stock' => $outOfStock
                 ]);
             });
 
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()]);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
     // --------------------------
     // List all products
     // --------------------------
-    public function index()
+    public function index(Request $request)
     {
         try {
-            return Cache::remember('products_list', 12, function () {
-                $products = Product::with(['category', 'supplier'])->get();
+            return CacheHelper::remember(CacheHelper::productsKey(), 12, function () use ($request) {
+                
+        $perPage = $request->query('per_page', 7);
+
+        // Fetch products with pagination
+        $products = Product::with(['category', 'supplier'])->paginate($perPage);
 
                 $productsTable = $products->map(function ($product) {
-                    $status = $product->stock_quantity == 0 ? 'Out of Stock'
-                        : ($product->reorder_level > 0 && $product->stock_quantity <= $product->reorder_level ? 'Low Stock'
-                            : 'In Stock');
-
                     return [
                         'id' => $product->id,
                         'name' => $product->name,
@@ -98,22 +92,17 @@ class ProductController extends Controller
                         'reorder_level' => $product->reorder_level,
                         'description' => $product->description,
                         'stock_quantity' => $product->stock_quantity,
-                        'status' => $status,
-                        'image' => $product->image
-                            ? (str_starts_with($product->image, 'http') ? $product->image : url('storage/' . $product->image))
-                            : null,
+                        'status' => $product->stock_status,
+                        'low_stock' => $product->is_low_stock,
+                        'image' => ImageHelper::getImageUrl($product->image),
                     ];
                 });
 
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'All products retrieved successfully',
-                    'data' => $productsTable
-                ]);
+                return ResponseHelper::success('All products retrieved successfully', $productsTable);
             });
 
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => 'Error fetching products: ' . $e->getMessage()]);
+            return ResponseHelper::error('Error fetching products: ' . $e->getMessage());
         }
     }
 
@@ -192,13 +181,9 @@ class ProductController extends Controller
 
             // Upload image or placeholder
             if ($request->hasFile('image')) {
-                $uploadedImage = Cloudinary::upload(
-                    $request->file('image')->getRealPath(),
-                    ['folder' => 'products']
-                );
-                $validated['image'] = $uploadedImage->getSecurePath();
+                $validated['image'] = ImageHelper::uploadToCloudinary($request->file('image'), 'products');
             } else {
-                $validated['image'] = "https://via.placeholder.com/300x300.png?text=Product+Image";
+                $validated['image'] = "https://i.pinimg.com/736x/22/ae/3b/22ae3bb2f7b46bed0e3a99a025835ab0.jpg";
             }
 
             // Auto-calculate price
@@ -221,18 +206,9 @@ class ProductController extends Controller
             $product = Product::create($validated);
 
             // Log activity
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'created',
-                'module' => 'products',
-                'record_id' => $product->id
-            ]);
+            ActivityLogHelper::logCreated('products', $product->id);
 
-            return response()->json([
-                'status' => 201,
-                'message' => 'Product created successfully',
-                'data' => $product
-            ], 201);
+            return ResponseHelper::success('Product created successfully', $product, 201);
 
         } catch (\Exception $e) {
             return response()->json(['status' => 500, 'message' => $e->getMessage()]);
@@ -264,18 +240,10 @@ class ProductController extends Controller
             // Handle image upload
             if ($request->hasFile('image')) {
                 if (!empty($product->image)) {
-                    $path = parse_url($product->image, PHP_URL_PATH);
-                    $filename = pathinfo($path, PATHINFO_FILENAME);
-                    $folder = dirname($path);
-                    $publicId = trim($folder, '/') . '/' . $filename;
-                    Cloudinary::destroy($publicId);
+                    ImageHelper::deleteFromCloudinary($product->image, 'products');
                 }
 
-                $uploadedImage = Cloudinary::upload(
-                    $request->file('image')->getRealPath(),
-                    ['folder' => 'products']
-                );
-                $validated['image'] = $uploadedImage->getSecurePath();
+                $validated['image'] = ImageHelper::uploadToCloudinary($request->file('image'), 'products');
             }
 
             // Auto-calculate price if cost changed
@@ -297,18 +265,9 @@ class ProductController extends Controller
 
             $product->update($validated);
 
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'updated',
-                'module' => 'products',
-                'record_id' => $product->id
-            ]);
+            ActivityLogHelper::logUpdated('products', $product->id);
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Product updated successfully',
-                'data' => $product
-            ]);
+            return ResponseHelper::success('Product updated successfully', $product);
 
         } catch (\Exception $e) {
             return response()->json(['status' => 500, 'message' => $e->getMessage()]);
@@ -325,30 +284,17 @@ class ProductController extends Controller
 
             // Delete image from Cloudinary
             if (!empty($product->image)) {
-                $path = parse_url($product->image, PHP_URL_PATH);
-                $filename = pathinfo($path, PATHINFO_FILENAME);
-                $folder = dirname($path);
-                $publicId = trim($folder, '/') . '/' . $filename;
-                Cloudinary::destroy($publicId);
+                ImageHelper::deleteFromCloudinary($product->image, 'products');
             }
 
             $product->forceDelete();
 
-            ActivityLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'deleted',
-                'module' => 'products',
-                'record_id' => $product->id
-            ]);
+            ActivityLogHelper::logDeleted('products', $product->id);
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Product and image deleted successfully'
-            ]);
+            return ResponseHelper::success('Product and image deleted successfully');
 
         } catch (\Exception $e) {
-            Log::error('Delete product error: ' . $e->getMessage());
-            return response()->json(['status' => 500, 'message' => $e->getMessage()]);
+            return ResponseHelper::error('Delete product error: ' . $e->getMessage());
         }
     }
 }

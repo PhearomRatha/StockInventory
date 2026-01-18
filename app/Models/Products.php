@@ -43,4 +43,33 @@ class Products extends Model
     {
         return $this->hasMany(Stock_outs::class);
     }
+
+    public function saleItems()
+    {
+        return $this->hasMany(SaleItem::class);
+    }
+
+    // Accessor for stock status
+    public function getStockStatusAttribute()
+    {
+        $currentStock = $this->stock_quantity;
+        $lowStockThreshold = 10;
+
+        if ($currentStock == 0) {
+            return 'Out-of-Stock';
+        } elseif ($currentStock >= $lowStockThreshold * 2) {
+            return 'In Stock';
+        } elseif ($currentStock >= $lowStockThreshold) {
+            return 'Low Stock';
+        } else {
+            return 'Very Low Stock';
+        }
+    }
+
+    // Accessor for low stock flag
+    public function getIsLowStockAttribute()
+    {
+        $lowStockThreshold = 10;
+        return $this->stock_quantity < $lowStockThreshold;
+    }
 }

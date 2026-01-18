@@ -18,21 +18,19 @@ class AuthController extends Controller
                 'password' => 'required|string|min:6',
             ]);
 
-            // Hash password
+            // Hash password before storing
             $validated['password'] = Hash::make($validated['password']);
 
             // Assign default role and inactive status
-            $validated['role_id'] = 2; // 3 = pending user (you can create this in roles table)
-            $validated['status'] = 0;  // 0 = inactive, waiting for admin approval
+            $validated['role_id'] = 2; // default role
+            $validated['status'] = 0;  // inactive, waiting approval
 
             $user = User::create($validated);
 
             return response()->json([
                 'status' => 201,
                 'message' => 'Registration successful! Waiting for admin approval.',
-                'data' => [
-                    'user' => $user,
-                ]
+                'data' => ['user' => $user] // return created user
             ], 201);
 
         } catch (\Exception $e) {
@@ -49,18 +47,17 @@ class AuthController extends Controller
                 'password' => 'required|string'
             ]);
 
-            // Fetch user with role
+            // Fetch user by email
             $user = User::with('role')->where('email', $request->email)->first();
 
+            // Check credentials
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json(['status' => 401, 'message' => 'Invalid credentials'], 401);
             }
 
+            // Check if account is approved
             if ($user->status != 1) {
-                return response()->json([
-                    'status' => 403,
-                    'message' => 'Your account is not yet approved by admin.'
-                ], 403);
+                return response()->json(['status' => 403, 'message' => 'Your account is not yet approved by admin.'], 403);
             }
 
             $token = $user->createToken('api-token')->plainTextToken;
@@ -85,4 +82,5 @@ class AuthController extends Controller
         $request->user()->tokens()->delete();
         return response()->json(['status'=>200,'message'=>'Logged out successfully']);
     }
+
 }

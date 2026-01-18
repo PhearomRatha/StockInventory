@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -174,5 +175,3 @@ Route::middleware('role:Admin')->controller(ActivityLogsController::class)->grou
 
 
 });
-
-

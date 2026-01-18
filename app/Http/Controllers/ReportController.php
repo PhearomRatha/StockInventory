@@ -13,6 +13,7 @@ use App\Models\Stock_outs as StockOut;
 use App\Models\Customers as Customer;
 use App\Models\Activity_logs as ActivityLog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ReportController extends Controller
 {
@@ -53,19 +54,29 @@ class ReportController extends Controller
                 return $sale->saleItems->sum('quantity');
             });
 
-            // Best-selling products
+            // Product sales details
             $productSales = [];
             foreach ($sales as $sale) {
                 foreach ($sale->saleItems as $item) {
                     $productName = $item->product->name ?? 'Unknown';
-                    if (!isset($productSales[$productName])) {
-                        $productSales[$productName] = 0;
+                    $productId = $item->product->id ?? null;
+                    if (!isset($productSales[$productId])) {
+                        $productSales[$productId] = [
+                            'product_id' => $productId,
+                            'product_name' => $productName,
+                            'quantity_sold' => 0,
+                            'total_revenue' => 0
+                        ];
                     }
-                    $productSales[$productName] += $item->quantity;
+                    $productSales[$productId]['quantity_sold'] += $item->quantity;
+                    $productSales[$productId]['total_revenue'] += ($item->price * $item->quantity) - $item->discount;
                 }
             }
-            arsort($productSales);
-            $bestSellingProduct = !empty($productSales) ? key($productSales) : null;
+            // Sort by quantity sold descending
+            usort($productSales, function($a, $b) {
+                return $b['quantity_sold'] <=> $a['quantity_sold'];
+            });
+            $bestSellingProduct = !empty($productSales) ? $productSales[0]['product_name'] : null;
 
             // Sales by payment method
             $salesByPaymentMethod = Payment::where('reference_type', 'sale')
@@ -91,6 +102,7 @@ class ReportController extends Controller
                 'total_discounts' => $totalDiscounts,
                 'total_items_sold' => $totalItemsSold,
                 'best_selling_product' => $bestSellingProduct,
+                'product_sales' => array_values($productSales),
                 'sales_by_payment_method' => $salesByPaymentMethod,
                 'top_customers' => $salesByCustomer->values()
             ]);
@@ -131,6 +143,12 @@ class ReportController extends Controller
             $incomeByMethod = $payments->where('payment_type', 'income')->groupBy('payment_method')->map->sum('amount');
             $expenseByMethod = $payments->where('payment_type', 'expense')->groupBy('payment_method')->map->sum('amount');
 
+            // Specific totals for Bakong and Cash
+            $bakongIncome = $incomeByMethod->get('bakong', 0);
+            $cashIncome = $incomeByMethod->get('cash', 0);
+            $bakongExpense = $expenseByMethod->get('bakong', 0);
+            $cashExpense = $expenseByMethod->get('cash', 0);
+
             // By type
             $incomeByType = $payments->where('payment_type', 'income')->groupBy('reference_type')->map->sum('amount');
             $expenseByType = $payments->where('payment_type', 'expense')->groupBy('reference_type')->map->sum('amount');
@@ -141,6 +159,10 @@ class ReportController extends Controller
                 'total_income' => $totalIncome,
                 'total_expense' => $totalExpense,
                 'net_profit' => $netProfit,
+                'bakong_income' => $bakongIncome,
+                'cash_income' => $cashIncome,
+                'bakong_expense' => $bakongExpense,
+                'cash_expense' => $cashExpense,
                 'income_by_method' => $incomeByMethod,
                 'expense_by_method' => $expenseByMethod,
                 'income_by_type' => $incomeByType,
@@ -152,59 +174,54 @@ class ReportController extends Controller
    
     public function stockReport(Request $request)
     {
-        return Cache::remember('report_stock', 12, function () {
-            $products = Product::with('category')->get();
+        try {
+            return Cache::remember('report_stock', 12, function () {
+                $products = Product::with('category')->get();
 
-            $stockData = $products->map(function ($product) {
-                $stockIns = StockIn::where('product_id', $product->id)->sum('quantity');
-                $stockOuts = StockOut::where('product_id', $product->id)->sum('quantity') +
-                             SaleItem::where('product_id', $product->id)->sum('quantity');
-                $currentStock = $product->stock_quantity;
-                $stockValue = $currentStock * $product->price;
-                $percent = $stockIns > 0 ? ($currentStock / $stockIns) * 100 : 0;
+                $stockData = $products->map(function ($product) {
+                    $stockIns = $product->stockIns()->sum('quantity');
+                    $stockOuts = $product->stockOuts()->sum('quantity') +
+                                 $product->saleItems()->sum('quantity');
+                    $currentStock = $product->stock_quantity ?? 0;
+                    $stockValue = ($currentStock ?? 0) * ($product->price ?? 0);
 
-                if ($currentStock == 0) {
-                    $message = 'Out-of-Stock';
-                } elseif ($percent >= 50) {
-                    $message = 'In Stock';
-                } elseif ($percent >= 10) {
-                    $message = 'Low Stock';
-                } else {
-                    $message = 'Very Low Stock';
-                }
+                    return [
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'category' => $product->category->name ?? 'Unknown',
+                        'current_stock' => $currentStock,
+                        'stock_ins' => $stockIns,
+                        'stock_outs' => $stockOuts,
+                        'stock_value' => $stockValue,
+                        'low_stock' => $product->is_low_stock,
+                        'message' => $product->stock_status
+                    ];
+                });
 
-                $lowStock = $percent < 50; // Low stock if less than 50%
+                $totalStockValue = $stockData->sum('stock_value');
+                $lowStockProducts = $stockData->where('low_stock', true);
 
-                return [
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'category' => $product->category->name ?? 'Unknown',
-                    'current_stock' => $currentStock,
-                    'stock_ins' => $stockIns,
-                    'stock_outs' => $stockOuts,
-                    'stock_value' => $stockValue,
-                    'low_stock' => $lowStock,
-                    'message' => $message
-                ];
+                $totalInStock = $stockData->where('message', 'In Stock')->count();
+                $totalLowStock = $stockData->whereIn('message', ['Low Stock', 'Very Low Stock'])->count();
+                $totalOutOfStock = $stockData->where('message', 'Out-of-Stock')->count();
+
+                return response()->json([
+                    'status' => true,
+                    'total_stock_value' => $totalStockValue,
+                    'total_in_stock' => $totalInStock,
+                    'total_low_stock' => $totalLowStock,
+                    'total_out_of_stock' => $totalOutOfStock,
+                    'low_stock_products' => $lowStockProducts,
+                    'stock_details' => $stockData
+                ]);
             });
-
-            $totalStockValue = $stockData->sum('stock_value');
-            $lowStockProducts = $stockData->where('low_stock', true);
-
-            $totalInStock = $stockData->where('messsage', 'In Stock')->count();
-            $totalLowStock = $stockData->whereIn('message', ['Low Stock', 'Very Low Stock'])->count();
-            $totalOutOfStock = $stockData->where('message', 'Out-of-Stock')->count();
-
+        } catch (\Exception $e) {
+            Log::error('Stock report error: ' . $e->getMessage());
             return response()->json([
-                'status' => true,
-                'total_stock_value' => $totalStockValue,
-                'total_in_stock' => $totalInStock,
-                'total_low_stock' => $totalLowStock,
-                'total_out_of_stock' => $totalOutOfStock,
-                'low_stock_products' => $lowStockProducts,
-                'stock_details' => $stockData
-            ]);
-        });
+                'status' => false,
+                'message' => 'Stock report failed: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
  

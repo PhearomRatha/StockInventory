@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Categories as Category;
+use App\Helpers\ResponseHelper;
 
 class CategoryController extends Controller
 {
@@ -11,9 +12,9 @@ class CategoryController extends Controller
     {
         try {
             $categories = Category::all();
-            return response()->json(['status'=>200,'message'=>'Categories retrieved successfully','data'=>$categories],200);
+            return ResponseHelper::success('Categories retrieved successfully', $categories);
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
@@ -21,9 +22,9 @@ class CategoryController extends Controller
     {
         try {
             $category = Category::findOrFail($id);
-            return response()->json(['status'=>200,'message'=>'Category retrieved successfully','data'=>$category],200);
+            return ResponseHelper::success('Category retrieved successfully', $category);
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
@@ -36,9 +37,9 @@ class CategoryController extends Controller
             ]);
 
             $category = Category::create($validated);
-            return response()->json(['status'=>201,'message'=>'Category created successfully','data'=>$category],201);
+            return ResponseHelper::success('Category created successfully', $category, 201);
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
@@ -52,9 +53,9 @@ class CategoryController extends Controller
             ]);
 
             $category->update($validated);
-            return response()->json(['status'=>200,'message'=>'Category updated successfully','data'=>$category],200);
+            return ResponseHelper::success('Category updated successfully', $category);
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
@@ -63,9 +64,9 @@ class CategoryController extends Controller
         try {
             $category = Category::findOrFail($id);
             $category->delete();
-            return response()->json(['status'=>200,'message'=>'Category deleted successfully'],200);
+            return ResponseHelper::success('Category deleted successfully');
         } catch (\Exception $e) {
-            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 }
