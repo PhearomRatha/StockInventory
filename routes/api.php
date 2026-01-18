@@ -49,7 +49,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:Admin')->controller(UserController::class)->group(function () {
         Route::get('/users', 'index');
          Route::post('/users', [UserController::class, 'store']);
-        Route::post('/users/{id}', 'update');
+        Route::put('/users/{id}', 'update');
         Route::delete('/users/{id}', 'destroy');
     });
 
