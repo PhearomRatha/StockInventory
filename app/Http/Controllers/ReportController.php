@@ -149,9 +149,7 @@ class ReportController extends Controller
         });
     }
 
-    // -----------------------------
-    // 3. Stock Report
-    // -----------------------------
+   
     public function stockReport(Request $request)
     {
         return Cache::remember('report_stock', 12, function () {
@@ -163,7 +161,19 @@ class ReportController extends Controller
                              SaleItem::where('product_id', $product->id)->sum('quantity');
                 $currentStock = $product->stock_quantity;
                 $stockValue = $currentStock * $product->price;
-                $lowStock = $currentStock < 5; // Assuming low stock threshold
+                $percent = $stockIns > 0 ? ($currentStock / $stockIns) * 100 : 0;
+
+                if ($currentStock == 0) {
+                    $message = 'Out-of-Stock';
+                } elseif ($percent >= 50) {
+                    $message = 'In Stock';
+                } elseif ($percent >= 10) {
+                    $message = 'Low Stock';
+                } else {
+                    $message = 'Very Low Stock';
+                }
+
+                $lowStock = $percent < 50; // Low stock if less than 50%
 
                 return [
                     'product_id' => $product->id,
@@ -173,58 +183,31 @@ class ReportController extends Controller
                     'stock_ins' => $stockIns,
                     'stock_outs' => $stockOuts,
                     'stock_value' => $stockValue,
-                    'low_stock' => $lowStock
+                    'low_stock' => $lowStock,
+                    'message' => $message
                 ];
             });
 
             $totalStockValue = $stockData->sum('stock_value');
             $lowStockProducts = $stockData->where('low_stock', true);
 
+            $totalInStock = $stockData->where('message', 'In Stock')->count();
+            $totalLowStock = $stockData->whereIn('message', ['Low Stock', 'Very Low Stock'])->count();
+            $totalOutOfStock = $stockData->where('message', 'Out-of-Stock')->count();
+
             return response()->json([
                 'status' => true,
                 'total_stock_value' => $totalStockValue,
+                'total_in_stock' => $totalInStock,
+                'total_low_stock' => $totalLowStock,
+                'total_out_of_stock' => $totalOutOfStock,
                 'low_stock_products' => $lowStockProducts,
                 'stock_details' => $stockData
             ]);
         });
     }
 
-    // -----------------------------
-    // 4. Activity Log Report
-    // -----------------------------
-    public function activityLogReport(Request $request)
-    {
-        $request->validate([
-            'user_id' => 'nullable|exists:users,id',
-            'date' => 'nullable|date',
-            'action' => 'nullable|string',
-            'module' => 'nullable|string'
-        ]);
-
-        $cacheKey = 'report_activity_logs_' . md5(serialize($request->all()));
-        return Cache::remember($cacheKey, 5, function () use ($request) {
-            $query = ActivityLog::with('user');
-
-            if ($request->user_id) {
-                $query->where('user_id', $request->user_id);
-            }
-            if ($request->date) {
-                $query->whereDate('created_at', $request->date);
-            }
-            if ($request->action) {
-                $query->where('action', $request->action);
-            }
-            if ($request->module) {
-                $query->where('module', $request->module);
-            }
-
-            $logs = $query->orderByDesc('created_at')->get();
-
-            return response()->json([
-                'status' => true,
-                'total_logs' => $logs->count(),
-                'logs' => $logs
-            ]);
-        });
-    }
+ 
+    
+   
 }
