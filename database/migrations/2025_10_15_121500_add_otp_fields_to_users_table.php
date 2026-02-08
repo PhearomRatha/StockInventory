@@ -11,8 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('payments', function (Blueprint $table) {
-            $table->string('md5')->nullable();
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('otp_code')->nullable()->after('email_token');
+            $table->timestamp('otp_expires_at')->nullable()->after('otp_code');
         });
     }
 
@@ -21,8 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('payments', function (Blueprint $table) {
-            $table->dropColumn('md5');
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn(['otp_code', 'otp_expires_at']);
         });
     }
 };

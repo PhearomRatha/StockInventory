@@ -20,6 +20,9 @@ return new class extends Migration
     $table->string('paid_to_from');
     $table->date('payment_date');
     $table->foreignId('recorded_by')->constrained('users');
+    $table->string('bill_number')->nullable();
+    $table->string('status')->default('completed');
+    $table->string('md5')->nullable();
     $table->timestamps();
 });
 

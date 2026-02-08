@@ -20,6 +20,7 @@ return new class extends Migration
     $table->enum('payment_status', ['paid','unpaid','partial'])->default('unpaid');
     $table->string('payment_method')->nullable();
     $table->string('md5')->nullable();
+    $table->string('status')->default('completed');
     $table->foreignId('sold_by')->constrained('users');
     $table->timestamps();
 });

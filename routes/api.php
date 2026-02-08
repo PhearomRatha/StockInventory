@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -14,10 +13,10 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,46 +26,79 @@ use Illuminate\Support\Facades\Http;
 | Role-based access and token protection included
 |--------------------------------------------------------------------------
 */
+
+// Test database connection
 Route::get('/test-db', function () {
     try {
         DB::connection()->getPdo();
-        return "Database connected successfully!";
+        return response()->json([
+            'status' => 200,
+            'message' => 'Database connected successfully!',
+            'database' => config('database.default'),
+        ]);
     } catch (\Exception $e) {
-        return "Database connection failed: " . $e->getMessage();
+        return response()->json([
+            'status' => 500,
+            'message' => 'Database connection failed: ' . $e->getMessage(),
+        ], 500);
     }
 });
 
-// ---------------------- AUTH ----------------------
-// Login route (public)
-Route::post('/login', [AuthController::class, 'login']);
-Route::get('/pubroles', [RoleController::class, 'publicRoles']);
-Route::post('/signup', [AuthController::class, 'register']);
-// Protected routes
-Route::middleware(['auth:sanctum'])->group(function () {
+// ====================== PUBLIC AUTH ROUTES ======================
+// Registration and OTP verification (no auth required)
+Route::prefix('auth')->group(function () {
+    // Registration
+    Route::post('/register', [AuthController::class, 'register']);
+    
+    // OTP Verification
+    Route::post('/verify-otp', [AuthController::class, 'verifyOTP']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOTP']);
+    
+    // Check registration status
+    Route::post('/check-status', [AuthController::class, 'checkRegistrationStatus']);
+    
+    // Login
+    Route::post('/login', [AuthController::class, 'login']);
+});
 
-    // Logout route
-    Route::post('/logout', [AuthController::class, 'logout']);
-    // Users (Admin only)
-    Route::middleware('role:Admin')->controller(UserController::class)->group(function () {
-        Route::get('/users', 'index');
-         Route::post('/users', [UserController::class, 'store']);
-        Route::put('/users/{id}', 'update');
-        Route::delete('/users/{id}', 'destroy');
+// Public roles
+Route::get('/roles', [RoleController::class, 'publicRoles']);
+
+// ====================== PROTECTED AUTH ROUTES ======================
+// Require authentication
+Route::middleware(['auth:sanctum'])->group(function () {
+    
+    // Current user info
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    
+    // Logout
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/logout-all', [AuthController::class, 'logoutAll']);
+    
+    // Refresh token
+    Route::post('/auth/refresh', [AuthController::class, 'refreshToken']);
+    
+    // ====================== ADMIN ROUTES ======================
+    // User approval workflow (Admin only)
+    Route::middleware('role:Admin')->prefix('admin')->group(function () {
+        
+        // User requests
+        Route::get('/pending-requests', [AdminController::class, 'getPendingRequests']);
+        Route::post('/approve-user', [AdminController::class, 'approveUser']);
+        Route::post('/reject-user', [AdminController::class, 'rejectUser']);
+        
+        // User management
+        Route::get('/users', [AdminController::class, 'getAllUsers']);
+        Route::get('/stats', [AdminController::class, 'getStats']);
+        Route::post('/toggle-status', [AdminController::class, 'toggleUserStatus']);
+    });
+    
+    // ====================== DASHBOARD ======================
+    Route::prefix('dashboard')->middleware('role:Admin,Manager,Staff')->group(function () {
+        Route::get('/index', [DashboardController::class, 'index']);
     });
 
-});
-
-// ---------------------- PROTECTED ROUTES ----------------------
-Route::middleware(['auth:sanctum'])->group(function () {
-
-    // ---------------------- DASHBOARD ----------------------
-Route::prefix('dashboard')->group(function () {
-
-    Route::get('/index', [DashboardController::class, 'index'])->middleware('role:Admin,Manager,Staff');
-
-});
-
-    // ---------------------- ROLES ----------------------
+    // ====================== ROLES ======================
     Route::middleware('role:Admin')->controller(RoleController::class)->group(function () {
         Route::get('/roles', 'index');
         Route::post('/roles', 'store');
@@ -74,7 +106,7 @@ Route::prefix('dashboard')->group(function () {
         Route::delete('/roles/{id}', 'destroy');
     });
 
-    // ---------------------- PRODUCTS ----------------------
+    // ====================== PRODUCTS ======================
     Route::middleware('role:Staff')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
         Route::get('/products/{id}', 'show');
@@ -82,7 +114,8 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/products/total', 'totalPro');
         Route::get('/products/stock-status', 'stock');
     });
-        Route::middleware('role:Admin,Manager')->controller(ProductController::class)->group(function () {
+    
+    Route::middleware('role:Admin,Manager')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
         Route::get('/products/{id}', 'show');
         Route::post('/products', 'store');
@@ -92,7 +125,7 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/products/stock-status', 'stock');
     });
 
-    // ---------------------- CATEGORIES ----------------------
+    // ====================== CATEGORIES ======================
     Route::middleware('role:Admin,Manager')->controller(CategoryController::class)->group(function () {
         Route::get('/categories', 'index');
         Route::get('/categories/{id}', 'show');
@@ -101,7 +134,7 @@ Route::prefix('dashboard')->group(function () {
         Route::delete('/categories/{id}', 'destroy');
     });
 
-    // ---------------------- SUPPLIERS ----------------------
+    // ====================== SUPPLIERS ======================
     Route::middleware('role:Admin,Manager')->controller(SuppliersController::class)->group(function () {
         Route::get('/suppliers', 'index');
         Route::post('/suppliers', 'store');
@@ -109,7 +142,7 @@ Route::prefix('dashboard')->group(function () {
         Route::delete('/suppliers/{id}', 'destroy');
     });
 
-    // ---------------------- CUSTOMERS ----------------------
+    // ====================== CUSTOMERS ======================
     Route::middleware('role:Admin,Manager,Staff')->controller(CustomerController::class)->group(function () {
         Route::get('/customers', 'index');
         Route::get('/customers/{id}', 'show');
@@ -118,7 +151,7 @@ Route::prefix('dashboard')->group(function () {
         Route::delete('/customers/{id}', 'destroy');
     });
 
-    // ---------------------- STOCK INS ----------------------
+    // ====================== STOCK INS ======================
     Route::middleware('role:Admin,Manager,Staff')->controller(StockInsController::class)->group(function () {
         Route::get('/stock-ins', 'index');
         Route::get('stock-ins/overview', 'overview');
@@ -128,18 +161,17 @@ Route::prefix('dashboard')->group(function () {
         Route::get("/stock-ins/totalStockIn", 'totalStockIn');
     });
 
-    // ---------------------- STOCK OUTS ----------------------
+    // ====================== STOCK OUTS ======================
     Route::middleware('role:Admin,Manager,Staff')->controller(StockOutsController::class)->group(function () {
         Route::get('/stock-outs', 'index');
         Route::post('/stock-outs', 'store');
         Route::patch('/stock-outs/{id}', 'update');
         Route::get('/stock-outs/{id}', 'destroy');
         Route::get('/stock-out-dashboard', 'dashboardData');
-
         Route::get('/stock-outs/{id}/receipt', 'receipt');
     });
 
-    // ---------------------- SALES ----------------------
+    // ====================== SALES ======================
     Route::middleware('role:Admin,Manager,Staff')->controller(SalesController::class)->group(function () {
         Route::get('/sales', 'index');
         Route::post('/sales', 'store');
@@ -151,7 +183,7 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/sales/data', 'getSalesData');
     });
 
-    // ---------------------- PAYMENTS ----------------------
+    // ====================== PAYMENTS ======================
     Route::middleware('role:Admin,Manager,Staff')->controller(PaymentController::class)->group(function () {
         Route::get('/payments', 'index');
         Route::post('/payments', 'store');
@@ -162,7 +194,7 @@ Route::prefix('dashboard')->group(function () {
         Route::post('/payments/verify', 'verifyPayment');
     });
 
-    // ---------------------- REPORTS ----------------------
+    // ====================== REPORTS ======================
     Route::middleware('role:Admin,Manager')->controller(ReportController::class)->group(function () {
         Route::get('/reports/sales', 'salesReport');
         Route::get('/reports/financial', 'financialReport');
@@ -170,15 +202,12 @@ Route::prefix('dashboard')->group(function () {
         Route::get('/reports/activity-logs', 'activityLogReport');
     });
 
-
-   // ---------------------- ACTIVITY LOGS ----------------------
-Route::middleware('role:Admin')->controller(ActivityLogsController::class)->group(function () {
-    Route::get('/activity-logs', 'index');
-    Route::get('/activity-logs/filter', 'filter');   // <-- ADD THIS
-    Route::post('/activity-logs', 'store');
-    Route::patch('/activity-logs/{id}', 'update');
-    Route::delete('/activity-logs/{id}', 'destroy');
-});
-
-
+    // ====================== ACTIVITY LOGS ======================
+    Route::middleware('role:Admin')->controller(ActivityLogsController::class)->group(function () {
+        Route::get('/activity-logs', 'index');
+        Route::get('/activity-logs/filter', 'filter');
+        Route::post('/activity-logs', 'store');
+        Route::patch('/activity-logs/{id}', 'update');
+        Route::delete('/activity-logs/{id}', 'destroy');
+    });
 });

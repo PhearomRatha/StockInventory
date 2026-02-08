@@ -16,8 +16,9 @@ return new class extends Migration
     $table->string('name');
     $table->string('email')->unique();
     $table->string('password');
-    $table->foreignId('role_id')->constrained('roles'); // users → roles (many-to-one)
+    $table->foreignId('role_id')->nullable()->constrained('roles'); // users → roles (many-to-one)
     $table->boolean('status')->default(true); // active/inactive
+    $table->string('email_token')->nullable();
     $table->rememberToken();
     $table->timestamps();
 });

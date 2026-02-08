@@ -19,6 +19,7 @@ return new class extends Migration
     $table->text('address')->nullable();
     $table->text('preferences')->nullable();
     $table->text('notes')->nullable();
+    $table->string('type')->nullable();
     $table->timestamps();
 });
 
