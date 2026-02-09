@@ -11,9 +11,7 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    // --------------------------
-    // Count total products
-    // --------------------------
+
     public function totalPro()
     {
         try {
@@ -26,9 +24,7 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // Check stock status
-    // --------------------------
+
     public function stock()
     {
         try {
@@ -66,9 +62,7 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // List all products
-    // --------------------------
+
     public function index(Request $request)
     {
         try {
@@ -106,9 +100,7 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // Show single product
-    // --------------------------
+
     public function show($id)
     {
         try {
@@ -145,9 +137,6 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // Store new product
-    // --------------------------
     public function store(Request $request)
     {
         try {
@@ -215,9 +204,6 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // Update existing product
-    // --------------------------
     public function update(Request $request, $id)
     {
         try {
@@ -274,9 +260,7 @@ class ProductController extends Controller
         }
     }
 
-    // --------------------------
-    // Delete product
-    // --------------------------
+
     public function destroy($id)
     {
         try {

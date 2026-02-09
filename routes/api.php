@@ -91,6 +91,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/users', [AdminController::class, 'getAllUsers']);
         Route::get('/stats', [AdminController::class, 'getStats']);
         Route::post('/toggle-status', [AdminController::class, 'toggleUserStatus']);
+
+    Route::post('/admin/approve-user', [AuthController::class, 'approveUserRequest']);
+    Route::post('/admin/reject-user', [AuthController::class, 'rejectUserRequest']);
     });
     
     // ====================== DASHBOARD ======================
@@ -106,6 +109,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/roles/{id}', 'destroy');
     });
 
+    
     // ====================== PRODUCTS ======================
     Route::middleware('role:Staff')->controller(ProductController::class)->group(function () {
         Route::get('/products', 'index');
