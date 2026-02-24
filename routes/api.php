@@ -16,23 +16,12 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes - Stock Inventory System
-|--------------------------------------------------------------------------
-|
-| All API endpoints organized by resource type
-| Role-based access control with Sanctum authentication
-|
-*/
 
-// ============================================================================
+
 // TEST ROUTES
-// ============================================================================
-
 Route::get('/test-db', function () {
     try {
         DB::connection()->getPdo();
@@ -49,33 +38,20 @@ Route::get('/test-db', function () {
     }
 });
 
-
-// ============================================================================
-// PUBLIC AUTH ROUTES (No Authentication Required)
-// ============================================================================
-
 Route::prefix('auth')->group(function () {
-    // Registration
-    Route::post('/register', [AuthController::class, 'register']);
-
-    // OTP Verification
-    Route::post('/verify-otp', [AuthController::class, 'verifyOTP']);
-    Route::post('/resend-otp', [AuthController::class, 'resendOTP']);
-
-    // Check registration status
-    Route::post('/check-status', [AuthController::class, 'checkRegistrationStatus']);
-
-    // Login
+    // Login with email/password
     Route::post('/login', [AuthController::class, 'login']);
+
+    // Google OAuth routes
+    Route::post('/google', [AuthController::class, 'googleLogin']);
+    Route::post('/google-login', [AuthController::class, 'googleLogin']); // Alias for frontend compatibility
+    Route::get('/google/redirect', [AuthController::class, 'googleRedirect']);
+    Route::get('/google/callback', [AuthController::class, 'googleCallback']);
 });
 
-// Public roles listing
-Route::get('/roles', [RoleController::class, 'publicRoles']);
+// Public roles listing (for dropdowns, etc.)
+Route::get('/roles', [AuthController::class, 'getRoles']);
 
-
-// ============================================================================
-// PROTECTED AUTH ROUTES (Authentication Required)
-// ============================================================================
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
@@ -89,32 +65,44 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Refresh token
     Route::post('/auth/refresh', [AuthController::class, 'refreshToken']);
 
+    // Change password
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
-    // =========================================================================
-    // ADMIN ROUTES (Admin Role Only)
-    // =========================================================================
 
-    Route::middleware('role:Admin')->prefix('admin')->group(function () {
 
-        // User requests management
-        Route::get('/pending-requests', [AdminController::class, 'getPendingRequests']);
-        Route::post('/approve-user', [AdminController::class, 'approveUser']);
-        Route::post('/reject-user', [AdminController::class, 'rejectUser']);
-
-        // User management
-        Route::get('/users', [AdminController::class, 'getAllUsers']);
-        Route::get('/stats', [AdminController::class, 'getStats']);
-        Route::post('/toggle-status', [AdminController::class, 'toggleUserStatus']);
-
-        // Alternative routes (seems duplicated)
-        Route::post('/approve-user-request', [AuthController::class, 'approveUserRequest']);
-        Route::post('/reject-user-request', [AuthController::class, 'rejectUserRequest']);
+    Route::middleware('role:Admin,Manager')->prefix('admin')->group(function () {
+        Route::post('/reset-password', [AuthController::class, 'adminResetPassword']);
     });
 
 
-    // =========================================================================
-    // DASHBOARD ROUTES (Admin, Manager, Staff)
-    // =========================================================================
+    Route::middleware('role:Admin,Manager')
+        ->controller(UserManagementController::class)
+        ->prefix('users')
+        ->group(function () {
+            Route::get('/', 'index');
+            Route::post('/', 'store');
+            Route::get('/{id}', 'show');
+            Route::patch('/{id}', 'update');
+            Route::delete('/{id}', 'destroy');
+            Route::post('/{id}/toggle-status', 'toggleStatus');
+        });
+
+
+    Route::middleware('role:Admin')->prefix('admin')->group(function () {
+        // Admin stats
+        Route::get('/stats', [AdminController::class, 'getStats']);
+    });
+
+
+    Route::middleware('role:Admin')
+        ->controller(UserController::class)
+        ->prefix('legacy-users')
+        ->group(function () {
+            Route::get('/', 'index');
+            Route::get('/{id}', 'show');
+            Route::patch('/{id}', 'update');
+            Route::delete('/{id}', 'destroy');
+        });
 
     Route::prefix('dashboard')
         ->middleware('role:Admin,Manager,Staff')
@@ -122,10 +110,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/index', [DashboardController::class, 'index']);
         });
 
-
-    // =========================================================================
-    // ROLES ROUTES (Admin Only)
-    // =========================================================================
 
     Route::middleware('role:Admin')
         ->controller(RoleController::class)
@@ -136,11 +120,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::patch('/{id}', 'update');
             Route::delete('/{id}', 'destroy');
         });
-
-
-    // =========================================================================
-    // PRODUCTS ROUTES
-    // =========================================================================
 
     // Staff can only view products
     Route::middleware('role:Staff')
@@ -167,11 +146,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/stock-status', 'stock');
         });
 
-
-    // =========================================================================
-    // CATEGORIES ROUTES (Admin, Manager Only)
-    // =========================================================================
-
     Route::middleware('role:Admin,Manager')
         ->controller(CategoryController::class)
         ->prefix('categories')
@@ -184,10 +158,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
 
 
-    // =========================================================================
-    // SUPPLIERS ROUTES (Admin, Manager Only)
-    // =========================================================================
-
     Route::middleware('role:Admin,Manager')
         ->controller(SuppliersController::class)
         ->prefix('suppliers')
@@ -198,10 +168,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::delete('/{id}', 'destroy');
         });
 
-
-    // =========================================================================
-    // CUSTOMERS ROUTES (Admin, Manager, Staff)
-    // =========================================================================
 
     Route::middleware('role:Admin,Manager,Staff')
         ->controller(CustomerController::class)
@@ -214,10 +180,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::delete('/{id}', 'destroy');
         });
 
-
-    // =========================================================================
-    // STOCK INS ROUTES (Admin, Manager, Staff)
-    // =========================================================================
 
     Route::middleware('role:Admin,Manager,Staff')
         ->controller(StockInsController::class)
@@ -232,26 +194,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
 
 
-    // =========================================================================
-    // STOCK OUTS ROUTES (Admin, Manager, Staff)
-    // =========================================================================
-
     Route::middleware('role:Admin,Manager,Staff')
         ->controller(StockOutsController::class)
         ->prefix('stock-outs')
         ->group(function () {
             Route::get('/', 'index');
             Route::post('/', 'store');
-            Route::patch('/{id}', 'update');
-            Route::get('/{id}', 'show');  // Note: was 'destroy' in original, likely typo
             Route::get('/stock-out-dashboard', 'dashboardData');
+            Route::get('/{id}', 'show');
+            Route::patch('/{id}', 'update');
+            Route::delete('/{id}', 'destroy');
             Route::get('/{id}/receipt', 'receipt');
         });
 
-
-    // =========================================================================
-    // SALES ROUTES (Admin, Manager, Staff)
-    // =========================================================================
 
     Route::middleware('role:Admin,Manager,Staff')
         ->controller(SalesController::class)
@@ -268,10 +223,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
 
 
-    // =========================================================================
-    // PAYMENTS ROUTES (Admin, Manager, Staff)
-    // =========================================================================
-
+ 
     Route::middleware('role:Admin,Manager,Staff')
         ->controller(PaymentController::class)
         ->prefix('payments')

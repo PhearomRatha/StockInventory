@@ -21,6 +21,7 @@ class Products extends Model
         'cost',
         'stock_quantity',
         'reorder_level',
+        'is_low_stock',
         'image',
     ];
 

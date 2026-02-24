@@ -18,6 +18,9 @@ class CategoryController extends Controller
         }
     }
 
+    /**
+     * Get category by ID
+     */
     public function show($id)
     {
         try {
@@ -43,7 +46,7 @@ class CategoryController extends Controller
         }
     }
 
-    public function update(Request $request,$id)
+    public function update(Request $request, $id)
     {
         try {
             $category = Category::findOrFail($id);

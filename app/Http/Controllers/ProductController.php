@@ -63,6 +63,9 @@ class ProductController extends Controller
     }
 
 
+    /**
+     * Get all products
+     */
     public function index(Request $request)
     {
         try {
@@ -101,6 +104,9 @@ class ProductController extends Controller
     }
 
 
+    /**
+     * Get product by ID
+     */
     public function show($id)
     {
         try {
@@ -137,6 +143,9 @@ class ProductController extends Controller
         }
     }
 
+    /**
+     * Create new product
+     */
     public function store(Request $request)
     {
         try {
@@ -204,6 +213,9 @@ class ProductController extends Controller
         }
     }
 
+    /**
+     * Update product
+     */
     public function update(Request $request, $id)
     {
         try {
@@ -261,6 +273,9 @@ class ProductController extends Controller
     }
 
 
+    /**
+     * Delete product
+     */
     public function destroy($id)
     {
         try {

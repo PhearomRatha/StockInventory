@@ -2,303 +2,52 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customers;
+use Illuminate\Http\Request;
 use App\Models\Products;
 use App\Models\Sales;
-use App\Models\SaleItem;
 use App\Models\Stock_ins;
 use App\Models\Stock_outs;
-use App\Models\Suppliers;
-use Illuminate\Http\Request;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
+use App\Models\User;
+use App\Helpers\ResponseHelper;
 
 class DashboardController extends Controller
 {
-    /* ============================
-       DASHBOARD SUMMARY DATA
-       ============================ */
-
-       public function index(){
-        try {
-           $totalProduct = $this->totalProduct();
-           $totalCustomer = $this->totalCustomer();
-           $totalSales = $this->totalSales();
-           $totalSupplier = $this->totalSupplier();
-           $totalStockOut = $this->totalStockOut();
-           $totalStockIn = $this->totalStockIn();
-
-
-
-
-           return response()->json([
-            "totalProduct"=>$totalProduct,
-            "totalCustomer"=>$totalCustomer,
-            "totalSales" => $totalSales,
-           "totalSupplier" =>$totalSupplier,
-           "totalStockOut" =>$totalStockOut,
-           "totalStockIn "=>$totalStockIn
-
-           ]);
-
-        } catch (\Exception $th) {
-            return $this->jsonError($th);
-        }
-       }
-
-    // Total Products
-    public function totalProduct()
+    /**
+     * Get dashboard data
+     */
+    public function index()
     {
         try {
-            return Cache::remember('dashboard_total_products', 10, function () {
-                $totalThisMonth = Products::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->count();
+            $totalProducts = Products::count();
+            $totalUsers = User::count();
+            $totalSales = Sales::count();
+            $totalRevenue = Sales::sum('total_amount');
 
-                $totalLastMonth = Products::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->count();
+            $lowStock = Products::where('is_low_stock', true)->count();
+            $outOfStock = Products::where('stock_quantity', 0)->count();
 
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
+            $recentSales = Sales::with(['customer'])->latest()->take(5)->get();
+            $topProducts = Products::orderBy('stock_quantity', 'desc')->take(5)->get();
 
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
+            $monthlySales = Sales::whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
+                ->sum('total_amount');
+
+            return ResponseHelper::success('Dashboard data retrieved successfully', [
+                'overview' => [
+                    'total_products' => $totalProducts,
+                    'total_users' => $totalUsers,
+                    'total_sales' => $totalSales,
+                    'total_revenue' => $totalRevenue,
+                    'monthly_revenue' => $monthlySales,
+                    'low_stock_count' => $lowStock,
+                    'out_of_stock_count' => $outOfStock
+                ],
+                'recent_sales' => $recentSales,
+                'top_products' => $topProducts
+            ]);
         } catch (\Exception $e) {
-            return $this->jsonError($e);
+            return ResponseHelper::error($e->getMessage());
         }
-    }
-
-    // Total Customers
-    public function totalCustomer()
-    {
-        try {
-            return Cache::remember('dashboard_total_customers', 10, function () {
-                $totalThisMonth = Customers::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->count();
-
-                $totalLastMonth = Customers::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->count();
-
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
-
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    // Total Sales
-    public function totalSales()
-    {
-        try {
-            return Cache::remember('dashboard_total_sales', 5, function () {
-                $totalThisMonth = Sales::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->sum('total_amount');
-
-                $totalLastMonth = Sales::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->sum('total_amount');
-
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
-
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    // Total Suppliers
-    public function totalSupplier()
-    {
-        try {
-            return Cache::remember('dashboard_total_suppliers', 10, function () {
-                $totalThisMonth = Suppliers::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->count();
-
-                $totalLastMonth = Suppliers::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->count();
-
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
-
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    // Total Stock-In
-    public function totalStockIn()
-    {
-        try {
-            return Cache::remember('dashboard_total_stock_in', 5, function () {
-                $totalThisMonth = Stock_ins::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->sum('quantity');
-
-                $totalLastMonth = Stock_ins::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->sum('quantity');
-
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
-
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-    // Total Stock-Out
-    public function totalStockOut()
-    {
-        try {
-            return Cache::remember('dashboard_total_stock_out', 5, function () {
-                $totalThisMonth = Stock_outs::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->sum('quantity') + SaleItem::whereBetween('created_at', [
-                    Carbon::now()->startOfMonth(),
-                    Carbon::now()->endOfMonth()
-                ])->sum('quantity');
-
-                $totalLastMonth = Stock_outs::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->sum('quantity') + SaleItem::whereBetween('created_at', [
-                    Carbon::now()->subMonth()->startOfMonth(),
-                    Carbon::now()->subMonth()->endOfMonth()
-                ])->sum('quantity');
-
-                $percentChange = $this->calculatePercentChange($totalThisMonth, $totalLastMonth);
-
-                return response()->json([
-                    'status' => 200,
-                    'total_this_month' => $totalThisMonth,
-                    'total_last_month' => $totalLastMonth,
-                    'percent_change' => $percentChange
-                ]);
-            });
-        } catch (\Exception $e) {
-            return $this->jsonError($e);
-        }
-    }
-
-
-    // public function salesTrend()
-    // {
-    //     try {
-    //         return Cache::remember('dashboard_sales_trend', 20, function () {
-    //             $sales = Sales::select(
-    //                 DB::raw('DATE(created_at) as date'),
-    //                 DB::raw('SUM(total_amount) as total_sales')
-    //             )
-    //             ->groupBy('date')
-    //             ->orderBy('date')
-    //             ->get();
-
-    //             $sales = $sales->map(function ($item) {
-    //                 return [
-    //                     'date' => $item->date,
-    //                     'total_sales' => (float)$item->total_sales
-    //                 ];
-    //             });
-
-    //             return response()->json([
-    //                 'status' => 200,
-    //                 'message' => 'Sales trend retrieved successfully',
-    //                 'data' => $sales
-    //             ]);
-    //         });
-    //     } catch (\Exception $e) {
-    //         return $this->jsonError($e);
-    //     }
-    // }
-
-    // // Stock Level Chart Data
-    // public function stockLevels()
-    // {
-    //     try {
-    //         return Cache::remember('dashboard_stock_levels', 7, function () {
-    //             $products = Products::select('name as product', 'stock_quantity as stock')->get();
-
-    //             $products = $products->map(function ($item) {
-    //                 return [
-    //                     'product' => $item->product,
-    //                     'stock' => (int)$item->stock
-    //                 ];
-    //             });
-
-    //             return response()->json([
-    //                 'status' => 200,
-    //                 'data' => $products
-    //             ]);
-    //         });
-    //     } catch (\Exception $e) {
-    //         return $this->jsonError($e);
-    //     }
-    // }
-
-    /* ============================
-       HELPER FUNCTIONS
-       ============================ */
-
-    private function calculatePercentChange($current, $previous)
-    {
-        if ($previous == 0 && $current > 0) return 100;
-        if ($previous == 0 && $current == 0) return 0;
-
-        return round((($current - $previous) / $previous) * 100, 2);
-    }
-
-    private function jsonError($e)
-    {
-        return response()->json([
-            'status' => 500,
-            'error' => $e->getMessage()
-        ]);
     }
 }

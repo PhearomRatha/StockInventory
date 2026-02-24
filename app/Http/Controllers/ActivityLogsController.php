@@ -4,158 +4,96 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Activity_logs as ActivityLog;
+use App\Helpers\ResponseHelper;
 
 class ActivityLogsController extends Controller
 {
-    // -----------------------------------------------------------
-    // GET ALL LOGS
-    // -----------------------------------------------------------
-    public function index()
+    /**
+     * Get all activity logs
+     */
+    public function index(Request $request)
     {
         try {
-            $logs = ActivityLog::with('user')
-                ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($log) {
-                    return [
-                        'id' => $log->id,
-                        'user' => $log->user->name ?? 'Unknown',
-                        'action' => $log->action,
-                        'module' => $log->module,
-                        'record_id' => $log->record_id,
-                        'description' =>
-                            ($log->user->name ?? 'User') .
-                            " performed '{$log->action}' on {$log->module}" .
-                            ($log->record_id ? " (Record ID: {$log->record_id})" : ""),
-                        'created_at' => $log->created_at->format('Y-m-d H:i:s')
-                    ];
-                });
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Activity logs retrieved successfully',
-                'data' => $logs
-            ], 200);
-
+            $perPage = $request->per_page ?? 15;
+            $logs = ActivityLog::with('user')->latest()->paginate($perPage);
+            return ResponseHelper::success('Activity logs retrieved successfully', $logs);
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
-    // -----------------------------------------------------------
-    // SIMPLE FILTER (NEW)
-    // -----------------------------------------------------------
+    /**
+     * Filter activity logs
+     */
     public function filter(Request $request)
     {
         try {
-            $query = ActivityLog::with('user');
+            $query = ActivityLog::query();
 
-            // Filter by user ID
-            if ($request->user_id) {
-                $query->where('user_id', $request->user_id);
+            if ($request->type) {
+                $query->where('type', $request->type);
             }
 
-            // Filter by module
-            if ($request->module) {
-                $query->where('module', 'LIKE', "%{$request->module}%");
-            }
-
-            // Filter by action
-            if ($request->action) {
-                $query->where('action', 'LIKE', "%{$request->action}%");
-            }
-
-            // Filter by date range
             if ($request->start_date && $request->end_date) {
-                $query->whereBetween('created_at', [
-                    $request->start_date,
-                    $request->end_date
-                ]);
+                $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
             }
 
-            $logs = $query->orderBy('created_at', 'desc')->get();
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Filtered logs retrieved',
-                'data' => $logs
-            ], 200);
-
+            $logs = $query->latest()->get();
+            return ResponseHelper::success('Activity logs filtered successfully', $logs);
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
-    // -----------------------------------------------------------
-    // CREATE LOG
-    // -----------------------------------------------------------
+    /**
+     * Create an activity log
+     */
     public function store(Request $request)
     {
         try {
             $validated = $request->validate([
-                'user_id' => 'required|exists:users,id',
-                'action' => 'required|string',
-                'module' => 'required|string',
-                'record_id' => 'nullable|integer'
+                'type' => 'required|string',
+                'description' => 'required|string'
             ]);
 
             $log = ActivityLog::create($validated);
-
-            return response()->json([
-                'status' => 201,
-                'message' => 'Activity log created successfully',
-                'data' => $log
-            ], 201);
-
+            return ResponseHelper::success('Activity log created successfully', $log, 201);
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
-    // -----------------------------------------------------------
-    // UPDATE LOG
-    // -----------------------------------------------------------
+    /**
+     * Update an activity log
+     */
     public function update(Request $request, $id)
     {
         try {
             $log = ActivityLog::findOrFail($id);
 
             $validated = $request->validate([
-                'user_id' => 'sometimes|required|exists:users,id',
-                'action' => 'sometimes|required|string',
-                'module' => 'sometimes|required|string',
-                'record_id' => 'nullable|integer'
+                'type' => 'sometimes|required|string',
+                'description' => 'sometimes|required|string'
             ]);
 
             $log->update($validated);
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Activity log updated successfully',
-                'data' => $log
-            ], 200);
-
+            return ResponseHelper::success('Activity log updated successfully', $log);
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 
-    // -----------------------------------------------------------
-    // DELETE LOG
-    // -----------------------------------------------------------
+    /**
+     * Delete an activity log
+     */
     public function destroy($id)
     {
         try {
             $log = ActivityLog::findOrFail($id);
             $log->delete();
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Activity log deleted successfully'
-            ], 200);
-
+            return ResponseHelper::success('Activity log deleted successfully');
         } catch (\Exception $e) {
-            return response()->json(['status' => 500, 'message' => $e->getMessage()], 500);
+            return ResponseHelper::error($e->getMessage());
         }
     }
 }

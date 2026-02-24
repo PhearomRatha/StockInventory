@@ -18,6 +18,8 @@ class UserRequest extends Model
         'otp_attempts',
         'role_id',
         'verification_status',
+        'status',
+        'rejection_reason',
     ];
 
     protected $hidden = [

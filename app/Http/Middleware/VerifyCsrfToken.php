@@ -12,6 +12,12 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        //
+        'api/auth/login',
+        'api/auth/register',
+        'api/auth/google',
+        'api/auth/google-login',
+        'api/auth/google/redirect',
+        'api/auth/google/callback',
+        'sanctum/csrf-cookie',
     ];
 }

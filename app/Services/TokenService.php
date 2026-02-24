@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\TokenRevocation;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class TokenService
 {
@@ -64,7 +63,7 @@ class TokenService
      */
     public function isAccountLocked(string $email): bool
     {
-        return cache()->has($this->getAttemptKey($email)) && 
+        return cache()->has($this->getAttemptKey($email)) &&
                cache()->get($this->getAttemptKey($email)) >= self::MAX_LOGIN_ATTEMPTS;
     }
 
@@ -100,9 +99,9 @@ class TokenService
         // Verify password
         if (!Hash::check($password, $user->password)) {
             $this->incrementLoginAttempts($email);
-            
+
             $remainingAttempts = $this->getRemainingAttempts($email);
-            
+
             if ($remainingAttempts <= 0) {
                 cache()->put($this->getAttemptKey($email) . '_until', now()->addMinutes(self::LOCKOUT_MINUTES), self::LOCKOUT_MINUTES);
             }
@@ -116,9 +115,8 @@ class TokenService
         }
 
         // Check if user is active
-        if ($user->status !== 'ACTIVE') {
+        if ($user->status !== User::STATUS_ACTIVE) {
             $statusMessages = [
-                'PENDING' => 'Your account is pending verification. Please complete OTP verification.',
                 'INACTIVE' => 'Your account has been deactivated. Please contact administrator.',
             ];
 
@@ -128,7 +126,6 @@ class TokenService
                 'code' => 403,
                 'data' => [
                     'user_status' => $user->status,
-                    'requires_verification' => $user->status === 'PENDING',
                 ],
             ];
         }
@@ -138,7 +135,7 @@ class TokenService
 
         // Create Sanctum token with custom metadata for revocation
         $token = $user->createToken('auth-token', ['*'], now()->addHours(24));
-        
+
         // Store token for additional tracking
         TokenRevocation::create([
             'token_id' => $token->accessToken->id,
@@ -158,6 +155,7 @@ class TokenService
                     'role' => $user->role->name ?? 'User',
                     'role_id' => $user->role_id,
                     'status' => $user->status,
+                    'has_password' => !empty($user->password),
                 ],
                 'token' => $token->plainTextToken,
                 'token_type' => 'Bearer',
@@ -208,6 +206,10 @@ class TokenService
      */
     public function revokeCurrentToken($accessToken): bool
     {
+        if (!$accessToken) {
+            return false;
+        }
+
         $tokenId = $accessToken->id;
         $userId = $accessToken->tokenable_id;
 
@@ -233,7 +235,7 @@ class TokenService
             return false;
         }
 
-        return is_null($revocation->revoked_at) && 
+        return is_null($revocation->revoked_at) &&
                $revocation->expires_at->isFuture();
     }
 
