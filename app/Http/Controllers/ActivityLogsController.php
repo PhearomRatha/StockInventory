@@ -15,7 +15,11 @@ class ActivityLogsController extends Controller
     {
         try {
             $perPage = $request->per_page ?? 15;
-            $logs = ActivityLog::with('user')->latest()->paginate($perPage);
+            // OPTIMIZED: Ensure proper pagination with limit
+            $logs = ActivityLog::with('user')
+                ->latest()
+                ->paginate(min($perPage, 100)); // Cap at 100 records
+            
             return ResponseHelper::success('Activity logs retrieved successfully', $logs);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -38,8 +42,18 @@ class ActivityLogsController extends Controller
                 $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
             }
 
-            $logs = $query->latest()->get();
-            return ResponseHelper::success('Activity logs filtered successfully', $logs);
+            // OPTIMIZED: Use count() directly and add limit
+            $totalCount = $query->count();
+            
+            $logs = $query->with(['user'])
+                ->latest()
+                ->limit(100) // Cap at 100 records
+                ->get();
+            
+            return ResponseHelper::success('Activity logs filtered successfully', [
+                'total' => $totalCount,
+                'logs' => $logs
+            ]);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }

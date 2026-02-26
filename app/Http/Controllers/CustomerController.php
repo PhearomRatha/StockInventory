@@ -8,10 +8,15 @@ use App\Helpers\ResponseHelper;
 
 class CustomerController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $customers = Customer::all();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Add pagination and select only needed columns
+            $customers = Customer::select('id', 'name', 'email', 'phone', 'address', 'type')
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Customers retrieved successfully', $customers);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

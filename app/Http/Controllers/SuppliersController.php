@@ -8,10 +8,15 @@ use App\Helpers\ResponseHelper;
 
 class SuppliersController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $suppliers = Supplier::all();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Add pagination and select columns
+            $suppliers = Supplier::select('id', 'name', 'contact_person', 'email', 'phone', 'address')
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Suppliers retrieved successfully', $suppliers);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

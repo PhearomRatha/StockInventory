@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
@@ -498,4 +499,65 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+
+   public function register(Request $request)
+   {
+       try {
+           // Validate the request with strong password requirements
+           $validatedData = $request->validate([
+               'name' => ['required', 'string', 'max:255'],
+               'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+               'password' => [
+                   'required',
+                   'confirmed',
+                   Password::min(8)->mixedCase()->numbers()
+               ],
+               'password_confirmation' => ['required', 'string'],
+           ]);
+
+           // Get the default Staff role
+           $staffRole = Roles::where('name', Roles::ROLE_STAFF)->first();
+           
+           if (!$staffRole) {
+               return response()->json([
+                   'success' => false,
+                   'message' => 'Default role not found. Please contact administrator.'
+               ], 500);
+           }
+
+           // Create the user with default Staff role
+           $user = User::create([
+               'name' => $validatedData['name'],
+               'email' => $validatedData['email'],
+               'password' => Hash::make($validatedData['password']),
+               'role_id' => $staffRole->id,
+               'status' => User::STATUS_ACTIVE,
+           ]);
+
+           return response()->json([
+               'success' => true,
+               'message' => 'User registered successfully',
+               'user' => $user
+           ], 201);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        // Validation failed
+        return response()->json([
+            'success' => false,
+            'errors' => $e->errors()
+        ], 422);
+
+    } catch (\Throwable $th) {
+        // Other errors
+        return response()->json([
+            'success' => false,
+            'message' => 'Registration failed',
+            'error' => $th->getMessage()
+        ], 500);
+    }
 }
+}
+
+
+

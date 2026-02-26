@@ -29,27 +29,34 @@ class ProductController extends Controller
     {
         try {
             return CacheHelper::remember(CacheHelper::productsStockKey(), 5, function () {
-                $products = Product::all();
-                $lowStock = [];
-                $outOfStock = [];
-
-                foreach ($products as $product) {
-                    if ($product->stock_quantity == 0) {
-                        $outOfStock[] = [
-                            'id' => $product->id,
-                            'name' => $product->name,
-                            'stock_quantity' => $product->stock_quantity,
-                            'status' => 'Out of Stock'
-                        ];
-                    } elseif ($product->is_low_stock) {
-                        $lowStock[] = [
+                // OPTIMIZED: Use database queries instead of loading all and filtering in PHP
+                // Get low stock products (1-9 quantity)
+                $lowStock = Product::select('id', 'name', 'stock_quantity')
+                    ->whereBetween('stock_quantity', [1, 9])
+                    ->limit(50)
+                    ->get()
+                    ->map(function ($product) {
+                        return [
                             'id' => $product->id,
                             'name' => $product->name,
                             'stock_quantity' => $product->stock_quantity,
                             'status' => 'Low Stock'
                         ];
-                    }
-                }
+                    });
+
+                // Get out of stock products
+                $outOfStock = Product::select('id', 'name', 'stock_quantity')
+                    ->where('stock_quantity', 0)
+                    ->limit(50)
+                    ->get()
+                    ->map(function ($product) {
+                        return [
+                            'id' => $product->id,
+                            'name' => $product->name,
+                            'stock_quantity' => $product->stock_quantity,
+                            'status' => 'Out of Stock'
+                        ];
+                    });
 
                 return ResponseHelper::success('Stock status retrieved successfully', [
                     'low_stock' => $lowStock,
@@ -70,7 +77,7 @@ class ProductController extends Controller
     {
         try {
             return CacheHelper::remember(CacheHelper::productsKey(), 12, function () use ($request) {
-                
+        
         $perPage = $request->query('per_page', 7);
 
         // Fetch products with pagination
@@ -110,7 +117,9 @@ class ProductController extends Controller
     public function show($id)
     {
         try {
-            $product = Product::with(['category', 'supplier'])->findOrFail($id);
+            // OPTIMIZED: Limit relationship fields
+            $product = Product::with(['category:id,name', 'supplier:id,name,email,phone'])
+                ->findOrFail($id);
 
             $status = $product->stock_quantity == 0 ? 'Out of Stock'
                 : ($product->reorder_level > 0 && $product->stock_quantity <= $product->reorder_level ? 'Low Stock'
@@ -206,6 +215,11 @@ class ProductController extends Controller
             // Log activity
             ActivityLogHelper::logCreated('products', $product->id);
 
+            // Clear product caches
+            CacheHelper::forget(CacheHelper::productsKey());
+            CacheHelper::forget(CacheHelper::productsTotalKey());
+            CacheHelper::forget(CacheHelper::productsStockKey());
+
             return ResponseHelper::success('Product created successfully', $product, 201);
 
         } catch (\Exception $e) {
@@ -265,6 +279,11 @@ class ProductController extends Controller
 
             ActivityLogHelper::logUpdated('products', $product->id);
 
+            // Clear product caches
+            CacheHelper::forget(CacheHelper::productsKey());
+            CacheHelper::forget(CacheHelper::productsTotalKey());
+            CacheHelper::forget(CacheHelper::productsStockKey());
+
             return ResponseHelper::success('Product updated successfully', $product);
 
         } catch (\Exception $e) {
@@ -289,6 +308,11 @@ class ProductController extends Controller
             $product->forceDelete();
 
             ActivityLogHelper::logDeleted('products', $product->id);
+
+            // Clear product caches
+            CacheHelper::forget(CacheHelper::productsKey());
+            CacheHelper::forget(CacheHelper::productsTotalKey());
+            CacheHelper::forget(CacheHelper::productsStockKey());
 
             return ResponseHelper::success('Product and image deleted successfully');
 

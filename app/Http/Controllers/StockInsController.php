@@ -4,15 +4,27 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Stock_ins as StockIn;
+use App\Models\Products as Product;
 use App\Helpers\ResponseHelper;
 use App\Helpers\ActivityLogHelper;
+use Illuminate\Support\Facades\Cache;
 
 class StockInsController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $stockIns = StockIn::with(['product', 'supplier'])->get();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Use pagination + select columns
+            $stockIns = StockIn::select('id', 'product_id', 'supplier_id', 'quantity', 'date', 'notes', 'created_at')
+                ->with([
+                    'product:id,name,sku',  // Only needed product fields
+                    'supplier:id,name'     // Only needed supplier fields
+                ])
+                ->latest()
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Stock ins retrieved successfully', $stockIns);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -22,12 +34,24 @@ class StockInsController extends Controller
     public function overview()
     {
         try {
-            $totalStockIn = StockIn::sum('quantity');
-            $stockIns = StockIn::with(['product', 'supplier'])->latest()->take(10)->get();
-            return ResponseHelper::success('Stock in overview retrieved successfully', [
-                'total_stock_in' => $totalStockIn,
-                'recent_stock_ins' => $stockIns
-            ]);
+            // OPTIMIZED: Cache dashboard for 5 minutes
+            $data = Cache::remember('stock_in_dashboard', 300, function () {
+                $totalStockIn = StockIn::sum('quantity');
+                
+                // OPTIMIZED: Select only needed columns
+                $stockIns = StockIn::select('id', 'product_id', 'supplier_id', 'quantity', 'date', 'created_at')
+                    ->with(['product:id,name', 'supplier:id,name'])
+                    ->latest()
+                    ->take(10)
+                    ->get();
+                
+                return [
+                    'total_stock_in' => $totalStockIn,
+                    'recent_stock_ins' => $stockIns
+                ];
+            });
+            
+            return ResponseHelper::success('Stock in overview retrieved successfully', $data);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
@@ -44,13 +68,20 @@ class StockInsController extends Controller
                 'notes' => 'nullable|string'
             ]);
 
+            // OPTIMIZED: Use single query to get product
+            $product = Product::findOrFail($validated['product_id']);
+            
             $stockIn = StockIn::create($validated);
 
-            // Update product stock
-            $stockIn->product->stock_quantity += $validated['quantity'];
-            $stockIn->product->save();
+            // Update product stock using increment
+            Product::where('id', $validated['product_id'])
+                ->increment('stock_quantity', $validated['quantity']);
 
-            ActivityLogHelper::log('stock_in', "Stock In: {$validated['quantity']} units of {$stockIn->product->name} from {$stockIn->supplier->name}");
+            ActivityLogHelper::log('stock_in', "Stock In: {$validated['quantity']} units of {$product->name}");
+
+            // Clear caches
+            Cache::forget('stock_in_dashboard');
+            Cache::forget('stock_report');
 
             return ResponseHelper::success('Stock in created successfully', $stockIn, 201);
         } catch (\Exception $e) {
@@ -72,6 +103,10 @@ class StockInsController extends Controller
             ]);
 
             $stockIn->update($validated);
+            
+            // Clear caches
+            Cache::forget('stock_in_dashboard');
+
             return ResponseHelper::success('Stock in updated successfully', $stockIn);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -83,6 +118,10 @@ class StockInsController extends Controller
         try {
             $stockIn = StockIn::findOrFail($id);
             $stockIn->delete();
+            
+            // Clear caches
+            Cache::forget('stock_in_dashboard');
+            
             return ResponseHelper::success('Stock in deleted successfully');
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -92,7 +131,11 @@ class StockInsController extends Controller
     public function totalStockIn()
     {
         try {
-            $total = StockIn::sum('quantity');
+            // OPTIMIZED: Cache the total
+            $total = Cache::remember('stock_in_total', 60, function () {
+                return StockIn::sum('quantity');
+            });
+            
             return ResponseHelper::success('Total stock in retrieved successfully', ['total_stock_in' => $total]);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

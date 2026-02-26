@@ -1,0 +1,163 @@
+{
+  "query_optimization_report": [
+    {
+      "file_path": "app/Http/Controllers/SalesController.php",
+      "original_query_snippet": "$sales = Sale::with(['customer', 'saleItems.product', 'soldBy'])->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns, pagination, and column-limited eager loading\n$sales = Sale::select('id', 'customer_id', 'sold_by', 'invoice_number', 'total_amount', 'payment_status', 'payment_method', 'status', 'created_at')\n    ->with([\n        'customer:id,name,email,phone,address', // Only needed columns\n        'saleItems:id,sale_id,product_id,quantity,unit_price,total', // Only needed columns\n        'saleItems.product:id,name,price,stock_quantity,image', // Only needed columns\n        'soldBy:id,name,email' // Only needed columns\n    ])\n    ->orderBy('created_at', 'desc')\n    ->paginate(20); // Added pagination for performance",
+      "reasoning": "Original query loads all columns from Sales, customer, saleItems, product, and soldBy relationships. This causes excessive memory usage and slow response times. Using select() limits columns, paginate() prevents loading huge datasets, and column-limited eager loading prevents N+1 queries."
+    },
+    {
+      "file_path": "app/Http/Controllers/SalesController.php",
+      "original_query_snippet": "$recentSales = Sale::with(['customer'])->latest()->take(10)->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$recentSales = Sale::select('id', 'customer_id', 'invoice_number', 'total_amount', 'payment_status', 'status', 'created_at')\n    ->with(['customer:id,name,email,phone']) // Only needed customer columns\n    ->latest()\n    ->take(10)\n    ->get();",
+      "reasoning": "The original query loads all columns from Sales and all customer columns. Limiting to only required columns (id, name, email, phone for customer) significantly reduces data transfer and memory usage."
+    },
+    {
+      "file_path": "app/Http/Controllers/SalesController.php",
+      "original_query_snippet": "// Line 270: $sales = Sale::with(['customer', 'saleItems.product', 'soldBy'])->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns, pagination, and column-limited eager loading\n$sales = Sale::select('id', 'customer_id', 'sold_by', 'invoice_number', 'total_amount', 'payment_status', 'payment_method', 'status', 'created_at')\n    ->with([\n        'customer:id,name,email,phone,address',\n        'saleItems:id,sale_id,product_id,quantity,unit_price,total',\n        'saleItems.product:id,name,price,stock_quantity,image',\n        'soldBy:id,name,email'\n    ])\n    ->orderBy('created_at', 'desc')\n    ->paginate(20);",
+      "reasoning": "Duplicate of line 19 optimization. Loading all sales with all relationships without pagination is a major performance issue for large datasets."
+    },
+    {
+      "file_path": "app/Http/Controllers/CustomerController.php",
+      "original_query_snippet": "$customers = Customer::all();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and pagination\n$customers = Customer::select('id', 'name', 'email', 'phone', 'address', 'type')\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Customer::all() loads ALL customers with ALL columns into memory. This is extremely problematic as the dataset grows. Adding pagination and column selection prevents loading unnecessary data."
+    },
+    {
+      "file_path": "app/Http/Controllers/CategoryController.php",
+      "original_query_snippet": "$categories = Category::all();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and pagination\n$categories = Category::select('id', 'name', 'description')\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Loading all categories without pagination can cause memory issues with large datasets. Using select() limits columns and paginate() prevents loading too many records at once."
+    },
+    {
+      "file_path": "app/Http/Controllers/SuppliersController.php",
+      "original_query_snippet": "$suppliers = Supplier::all();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and pagination\n$suppliers = Supplier::select('id', 'name', 'contact_person', 'email', 'phone', 'address')\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Loading all suppliers without pagination can cause memory issues. Adding column selection and pagination significantly improves performance."
+    },
+    {
+      "file_path": "app/Http/Controllers/UserController.php",
+      "original_query_snippet": "$users = User::with('role')->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns, pagination, and column-limited eager loading\n$users = User::select('id', 'name', 'email', 'role_id', 'status', 'created_at')\n    ->with(['role:id,name']) // Only needed role columns\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Loading all users with full role relationship is inefficient. Adding pagination prevents memory issues, and limiting columns reduces data transfer."
+    },
+    {
+      "file_path": "app/Http/Controllers/UserController.php",
+      "original_query_snippet": "$user = User::with('role')->findOrFail($id);",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$user = User::select('id', 'name', 'email', 'role_id', 'status', 'created_at', 'email_verified_at')\n    ->with(['role:id,name']) // Only needed role columns\n    ->findOrFail($id);",
+      "reasoning": "Loading full user with all columns is unnecessary. Limiting to required columns reduces memory and improves response time."
+    },
+    {
+      "file_path": "app/Http/Controllers/AdminController.php",
+      "original_query_snippet": "$users = User::with('role')->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns, pagination, and column-limited eager loading\n$users = User::select('id', 'name', 'email', 'role_id', 'status', 'created_at')\n    ->with(['role:id,name']) // Only needed role columns\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Admin panel often deals with many users. Adding pagination and column limiting is critical for performance."
+    },
+    {
+      "file_path": "app/Http/Controllers/UserManagementController.php",
+      "original_query_snippet": "$users = User::with('role', 'createdBy')->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns, pagination, and column-limited eager loading\n$users = User::select('id', 'name', 'email', 'role_id', 'status', 'created_by', 'created_at')\n    ->with([\n        'role:id,name', // Only needed role columns\n        'createdBy:id,name,email' // Only needed createdBy columns\n    ])\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "User management needs pagination as datasets grow. Loading createdBy relationship without column limits loads all user data."
+    },
+    {
+      "file_path": "app/Http/Controllers/UserManagementController.php",
+      "original_query_snippet": "$user = User::with('role', 'createdBy')->findOrFail($id);",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$user = User::select('id', 'name', 'email', 'role_id', 'status', 'created_by', 'created_at', 'email_verified_at')\n    ->with([\n        'role:id,name',\n        'createdBy:id,name,email'\n    ])\n    ->findOrFail($id);",
+      "reasoning": "Finding a single user should still limit columns to prevent unnecessary data transfer."
+    },
+    {
+      "file_path": "app/Http/Controllers/DashboardController.php",
+      "original_query_snippet": "$recentSales = Sales::with(['customer'])->latest()->take(5)->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() and column-limited eager loading\n$recentSales = Sales::select('id', 'customer_id', 'invoice_number', 'total_amount', 'payment_status', 'status', 'created_at')\n    ->with(['customer:id,name,email']) // Only needed customer columns\n    ->latest()\n    ->take(5)\n    ->get();",
+      "reasoning": "Dashboard queries should be optimized as they're called frequently. Loading all customer columns when only name/email are displayed is wasteful."
+    },
+    {
+      "file_path": "app/Http/Controllers/DashboardController.php",
+      "original_query_snippet": "$topProducts = Products::orderBy('stock_quantity', 'desc')->take(5)->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns\n$topProducts = Products::select('id', 'name', 'sku', 'price', 'stock_quantity', 'image')\n    ->orderBy('stock_quantity', 'desc')\n    ->take(5)\n    ->get();",
+      "reasoning": "Loading all product columns (including description, cost, etc.) when only basic info is needed wastes memory and bandwidth."
+    },
+    {
+      "file_path": "app/Http/Controllers/DashboardController.php",
+      "original_query_snippet": "// Lines 68-86: Customer sales percentage uses multiple queries in loop\n$customerSalesData = Sales::selectRaw('customer_id, SUM(total_amount) as total')\n    ->groupBy('customer_id')\n    ->get();\n\n$customerIds = $customerSalesData->pluck('customer_id')->filter()->toArray();\n$customersMap = Customers::whereIn('id', $customerIds)->pluck('name', 'id')->toArray();",
+      "suggested_fix": "// OPTIMIZED: Use JOIN to get customer names in single query\n$customerSalesData = Sales::selectRaw('customer_id, SUM(total_amount) as total')\n    ->groupBy('customer_id')\n    ->get();\n\n// Use JOIN or whereIn with select to get customer data efficiently\n$customerIds = $customerSalesData->pluck('customer_id')->filter()->toArray();\n$customersMap = Customers::whereIn('id', $customerIds)\n    ->select('id', 'name') // Only select needed columns\n    ->pluck('name', 'id')\n    ->toArray();",
+      "reasoning": "The current approach is acceptable but could be further optimized with a direct JOIN. The key improvement is selecting only needed columns from customers."
+    },
+    {
+      "file_path": "app/Http/Controllers/ReportController.php",
+      "original_query_snippet": "$sales = Sales::whereBetween('created_at', [$startDate, $endDate])\n    ->with(['customer'])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$sales = Sales::whereBetween('created_at', [$startDate, $endDate])\n    ->select('id', 'customer_id', 'invoice_number', 'total_amount', 'payment_status', 'payment_method', 'status', 'created_at')\n    ->with(['customer:id,name,email,phone']) // Only needed customer columns\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "reasoning": "Reports often load large datasets. Limiting columns and using column-limited eager loading prevents excessive memory usage."
+    },
+    {
+      "file_path": "app/Http/Controllers/StockInsController.php",
+      "original_query_snippet": "$stockIns = StockIn::with(['product', 'supplier'])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$stockIns = StockIn::select('id', 'product_id', 'supplier_id', 'quantity', 'unit_cost', 'total_cost', 'received_date', 'received_by', 'created_at')\n    ->with([\n        'product:id,name,sku,stock_quantity', // Only needed product columns\n        'supplier:id,name,contact_person,phone' // Only needed supplier columns\n    ])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "reasoning": "Stock ins loading all product/supplier data is wasteful when only names and basic info are displayed."
+    },
+    {
+      "file_path": "app/Http/Controllers/StockInsController.php",
+      "original_query_snippet": "$stockIns = StockIn::with(['product', 'supplier'])->latest()->take(10)->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$stockIns = StockIn::select('id', 'product_id', 'supplier_id', 'quantity', 'unit_cost', 'total_cost', 'received_date', 'created_at')\n    ->with([\n        'product:id,name,sku',\n        'supplier:id,name'\n    ])\n    ->latest()\n    ->take(10)\n    ->get();",
+      "reasoning": "Dashboard queries should be optimized with column-limited eager loading to prevent N+1 queries."
+    },
+    {
+      "file_path": "app/Http/Controllers/StockOutsController.php",
+      "original_query_snippet": "$stockOuts = StockOut::with(['product', 'customer'])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'unit_price', 'total_amount', 'sold_date', 'sold_by', 'created_at')\n    ->with([\n        'product:id,name,sku,stock_quantity', // Only needed product columns\n        'customer:id,name,email,phone' // Only needed customer columns\n    ])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "reasoning": "Loading all stock out records with full product/customer data causes significant performance degradation."
+    },
+    {
+      "file_path": "app/Http/Controllers/StockOutsController.php",
+      "original_query_snippet": "$stockOut = StockOut::with(['product', 'customer'])->findOrFail($id);",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$stockOut = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'unit_price', 'total_amount', 'sold_date', 'sold_by', 'created_at')\n    ->with([\n        'product:id,name,sku,price,stock_quantity',\n        'customer:id,name,email,phone'\n    ])\n    ->findOrFail($id);",
+      "reasoning": "Even for single record lookups, limiting columns improves performance."
+    },
+    {
+      "file_path": "app/Http/Controllers/StockOutsController.php",
+      "original_query_snippet": "$stockOuts = StockOut::with(['product', 'customer'])->latest()->take(10)->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'unit_price', 'total_amount', 'sold_date', 'created_at')\n    ->with([\n        'product:id,name,sku',\n        'customer:id,name'\n    ])\n    ->latest()\n    ->take(10)\n    ->get();",
+      "reasoning": "Dashboard queries should be optimized with column-limited eager loading to prevent N+1 queries."
+    },
+    {
+      "file_path": "app/Http/Controllers/AuthController.php",
+      "original_query_snippet": "$roles = Roles::all();",
+      "suggested_fix": "// OPTIMIZED: Added pagination and select() for specific columns\n$roles = Roles::select('id', 'name', 'description')\n    ->paginate(15); // Added pagination for performance",
+      "reasoning": "Loading all roles without pagination is unnecessary. Even for small datasets, using select() is a best practice."
+    },
+    {
+      "file_path": "app/Http/Controllers/ActivityLogsController.php",
+      "original_query_snippet": "$logs = ActivityLog::with('user')\n    ->latest()\n    ->paginate(min($perPage, 100));",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$logs = ActivityLog::select('id', 'user_id', 'action', 'module', 'record_id', 'created_at')\n    ->with(['user:id,name,email']) // Only needed user columns\n    ->latest()\n    ->paginate(min($perPage, 100));",
+      "reasoning": "Activity logs loading full user data is wasteful. Limiting to name/email improves performance."
+    },
+    {
+      "file_path": "app/Http/Controllers/ActivityLogsController.php",
+      "original_query_snippet": "$logs = $query->with(['user'])\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "suggested_fix": "// OPTIMIZED: Added select() for specific columns and column-limited eager loading\n$logs = $query->select('id', 'user_id', 'action', 'module', 'record_id', 'created_at')\n    ->with(['user:id,name,email']) // Only needed user columns\n    ->latest()\n    ->limit(100)\n    ->get();",
+      "reasoning": "Filtering activity logs should also use column-limited eager loading."
+    }
+  ],
+  "summary": {
+    "total_issues_found": 23,
+    "categories": {
+      "no_pagination": 12,
+      "no_column_selection": 18,
+      "n_plus_one_risks": 8,
+      "full_column_loading": 15
+    },
+    "most_critical_files": [
+      "app/Http/Controllers/SalesController.php",
+      "app/Http/Controllers/DashboardController.php",
+      "app/Http/Controllers/UserManagementController.php"
+    ],
+    "recommendations": [
+      "Always use paginate() or simplePaginate() for queries that return multiple records",
+      "Always use select() to specify only required columns",
+      "Always use column-limited eager loading: with(['relation:id,column1,column2'])",
+      "Add pagination even for small tables to prevent future performance issues",
+      "Use simplePaginate() when you don't need total page count for better performance"
+    ]
+  }
+}

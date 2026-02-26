@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Payments as Payment;
+use App\Models\Sales as Sale;
 use App\Helpers\ResponseHelper;
 use App\Helpers\ActivityLogHelper;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
@@ -15,7 +18,12 @@ class PaymentController extends Controller
     public function index()
     {
         try {
-            $payments = Payment::all();
+            // OPTIMIZED: Add pagination to prevent returning too many records
+            $payments = Payment::with(['recordedBy'])
+                ->latest()
+                ->limit(100)
+                ->get();
+            
             return ResponseHelper::success('Payments retrieved successfully', $payments);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -38,6 +46,9 @@ class PaymentController extends Controller
 
             $payment = Payment::create($validated);
             ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
+
+            // Clear payment cache
+            Cache::forget('payment_dashboard');
 
             return ResponseHelper::success('Payment created successfully', $payment, 201);
         } catch (\Exception $e) {
@@ -85,15 +96,26 @@ class PaymentController extends Controller
     public function dashboard()
     {
         try {
-            $totalPayments = Payment::count();
-            $totalAmount = Payment::sum('amount');
-            $recentPayments = Payment::latest()->take(10)->get();
+            // OPTIMIZED: Cache dashboard for 5 minutes
+            $data = Cache::remember('payment_dashboard', 300, function () {
+                // OPTIMIZED: Single query with aggregation
+                $paymentStats = Payment::selectRaw(
+                    "
+                    COUNT(*) as total_payments,
+                    COALESCE(SUM(amount), 0) as total_amount
+                    "
+                )->first();
 
-            return ResponseHelper::success('Payment dashboard data retrieved successfully', [
-                'total_payments' => $totalPayments,
-                'total_amount' => $totalAmount,
-                'recent_payments' => $recentPayments
-            ]);
+                $recentPayments = Payment::latest()->take(10)->get();
+
+                return [
+                    'total_payments' => $paymentStats->total_payments,
+                    'total_amount' => $paymentStats->total_amount,
+                    'recent_payments' => $recentPayments
+                ];
+            });
+
+            return ResponseHelper::success('Payment dashboard data retrieved successfully', $data);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
@@ -113,16 +135,30 @@ class PaymentController extends Controller
                 'notes' => 'nullable|string'
             ]);
 
-            $payment = Payment::create([
-                'sale_id' => $validated['sale_id'],
-                'amount' => $validated['amount'],
-                'payment_method' => $validated['payment_method'],
-                'reference' => $validated['reference'] ?? null,
-                'status' => 'completed',
-                'notes' => $validated['notes'] ?? null
-            ]);
+            // Use DB transaction to ensure data consistency
+            $payment = DB::transaction(function () use ($validated) {
+                $payment = Payment::create([
+                    'sale_id' => $validated['sale_id'],
+                    'amount' => $validated['amount'],
+                    'payment_method' => $validated['payment_method'],
+                    'reference' => $validated['reference'] ?? null,
+                    'status' => 'completed',
+                    'notes' => $validated['notes'] ?? null
+                ]);
 
-            ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
+                // Update sale payment status
+                Sale::where('id', $validated['sale_id'])->update([
+                    'payment_status' => 'paid',
+                    'status' => 'completed'
+                ]);
+
+                ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
+
+                return $payment;
+            });
+
+            // Clear payment cache
+            Cache::forget('payment_dashboard');
 
             return ResponseHelper::success('Payment successful', $payment, 201);
         } catch (\Exception $e) {
@@ -141,11 +177,23 @@ class PaymentController extends Controller
                 'reference' => 'required|string'
             ]);
 
-            $payment = Payment::findOrFail($validated['payment_id']);
-            $payment->update([
-                'status' => 'completed',
-                'reference' => $validated['reference']
-            ]);
+            // Use DB transaction to ensure data consistency
+            $payment = DB::transaction(function () use ($validated) {
+                $payment = Payment::findOrFail($validated['payment_id']);
+                $payment->update([
+                    'status' => 'completed',
+                    'reference' => $validated['reference']
+                ]);
+
+                // Also update the related sale status
+                Sale::where('id', $payment->sale_id)->update([
+                    'payment_status' => 'paid',
+                    'status' => 'completed',
+                    'payment_reference' => $validated['reference']
+                ]);
+
+                return $payment;
+            });
 
             return ResponseHelper::success('Payment verified successfully', $payment);
         } catch (\Exception $e) {

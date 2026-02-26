@@ -9,6 +9,7 @@ use App\Helpers\ResponseHelper;
 use App\Mail\AccountApprovedMail;
 use App\Mail\AccountRejectedMail;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Cache;
 
 class AdminController extends Controller
 {
@@ -18,7 +19,13 @@ class AdminController extends Controller
     public function getPendingRequests()
     {
         try {
-            $pendingRequests = UserRequest::where('status', 'pending')->get();
+            // OPTIMIZED: Add pagination and eager load user relationship
+            $pendingRequests = UserRequest::with('user')
+                ->where('status', 'pending')
+                ->latest()
+                ->limit(50)
+                ->get();
+            
             return ResponseHelper::success('Pending requests retrieved successfully', $pendingRequests);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -45,6 +52,9 @@ class AdminController extends Controller
 
             $userRequest->status = 'approved';
             $userRequest->save();
+
+            // Clear user cache after status change
+            Cache::forget('admin_stats');
 
             Mail::to($user->email)->send(new AccountApprovedMail($user));
 
@@ -75,6 +85,9 @@ class AdminController extends Controller
             $userRequest->rejection_reason = $validated['reason'] ?? null;
             $userRequest->save();
 
+            // Clear user cache after status change
+            Cache::forget('admin_stats');
+
             Mail::to($user->email)->send(new AccountRejectedMail($user, $validated['reason'] ?? null));
 
             return ResponseHelper::success('User rejected successfully');
@@ -86,10 +99,16 @@ class AdminController extends Controller
     /**
      * Get all users
      */
-    public function getAllUsers()
+    public function getAllUsers(Request $request)
     {
         try {
-            $users = User::with('role')->get();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Select only needed columns + paginate
+            $users = User::select('id', 'name', 'email', 'role_id', 'status', 'created_at')
+                ->with(['role:id,name'])  // Only fetch role name
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Users retrieved successfully', $users);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -102,12 +121,26 @@ class AdminController extends Controller
     public function getStats()
     {
         try {
-            $stats = [
-                'total_users' => User::count(),
-                'active_users' => User::where('status', 'active')->count(),
-                'pending_requests' => UserRequest::where('status', 'pending')->count(),
-                'rejected_users' => User::where('status', 'rejected')->count()
-            ];
+            // OPTIMIZED: Cache stats for 5 minutes
+            $stats = Cache::remember('admin_stats', 300, function () {
+                // OPTIMIZED: Use single query with conditional aggregation
+                $userStats = User::selectRaw(
+                    "
+                    COUNT(*) as total_users,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
+                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_users
+                    "
+                )->first();
+
+                $pendingRequests = UserRequest::where('status', 'pending')->count();
+
+                return [
+                    'total_users' => $userStats->total_users,
+                    'active_users' => $userStats->active_users,
+                    'pending_requests' => $pendingRequests,
+                    'rejected_users' => $userStats->rejected_users
+                ];
+            });
 
             return ResponseHelper::success('Admin stats retrieved successfully', $stats);
         } catch (\Exception $e) {
@@ -128,6 +161,9 @@ class AdminController extends Controller
             $user = User::findOrFail($validated['user_id']);
             $user->status = $user->status === 'active' ? 'inactive' : 'active';
             $user->save();
+
+            // Clear cache after status change
+            Cache::forget('admin_stats');
 
             return ResponseHelper::success('User status toggled successfully', ['new_status' => $user->status]);
         } catch (\Exception $e) {
@@ -156,6 +192,9 @@ class AdminController extends Controller
             $userRequest->status = 'approved';
             $userRequest->save();
 
+            // Clear cache after status change
+            Cache::forget('admin_stats');
+
             Mail::to($user->email)->send(new AccountApprovedMail($user));
 
             return ResponseHelper::success('User request approved successfully');
@@ -181,6 +220,9 @@ class AdminController extends Controller
             $userRequest->status = 'rejected';
             $userRequest->rejection_reason = $validated['reason'] ?? null;
             $userRequest->save();
+
+            // Clear cache after status change
+            Cache::forget('admin_stats');
 
             Mail::to($user->email)->send(new AccountRejectedMail($user, $validated['reason'] ?? null));
 

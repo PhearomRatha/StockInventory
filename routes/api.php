@@ -38,11 +38,18 @@ Route::get('/test-db', function () {
     }
 });
 
-Route::prefix('auth')->group(function () {
-    // Login with email/password
-    Route::post('/login', [AuthController::class, 'login']);
+// =========================================================================
+// PUBLIC ROUTES WITH RATE LIMITING
+// =========================================================================
+Route::middleware('throttle:5,1')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/auth/login', [AuthController::class, 'login']);
+});
 
-    // Google OAuth routes
+// =========================================================================
+// GOOGLE OAUTH ROUTES
+// =========================================================================
+Route::prefix('auth')->group(function () {
     Route::post('/google', [AuthController::class, 'googleLogin']);
     Route::post('/google-login', [AuthController::class, 'googleLogin']); // Alias for frontend compatibility
     Route::get('/google/redirect', [AuthController::class, 'googleRedirect']);
@@ -52,6 +59,9 @@ Route::prefix('auth')->group(function () {
 // Public roles listing (for dropdowns, etc.)
 Route::get('/roles', [AuthController::class, 'getRoles']);
 
+// Public roles route (no auth required)
+Route::get('/roles/public', [RoleController::class, 'publicRoles']);
+    
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
@@ -75,6 +85,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 
 
+
+
     Route::middleware('role:Admin,Manager')
         ->controller(UserManagementController::class)
         ->prefix('users')
@@ -91,6 +103,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:Admin')->prefix('admin')->group(function () {
         // Admin stats
         Route::get('/stats', [AdminController::class, 'getStats']);
+
+        // Admin user management routes
+        Route::get('/pending-requests', [AdminController::class, 'getPendingRequests']);
+        Route::post('/approve-user', [AdminController::class, 'approveUser']);
+        Route::post('/reject-user', [AdminController::class, 'rejectUser']);
+        Route::get('/users/all', [AdminController::class, 'getAllUsers']);
+        Route::post('/toggle-user-status', [AdminController::class, 'toggleUserStatus']);
+        Route::post('/approve-user-request', [AdminController::class, 'approveUserRequest']);
+        Route::post('/reject-user-request', [AdminController::class, 'rejectUserRequest']);
     });
 
 
@@ -164,7 +185,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ->group(function () {
             Route::get('/', 'index');
             Route::post('/', 'store');
-            Route::post('/{id}', 'update');
+            Route::patch('/{id}', 'update');
             Route::delete('/{id}', 'destroy');
         });
 
@@ -218,8 +239,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::delete('/{id}', 'destroy');
             Route::get('/dashboard', 'dashboard');
             Route::post('/checkout', 'checkoutSale');
-            Route::post('/verify-payment', 'verifySalePayment');
             Route::get('/data', 'getSalesData');
+            // NOTE: Payment verification now handled via PaymentsController::verifyPayment
+            // This maintains consistent API contract using payment_id
         });
 
 

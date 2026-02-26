@@ -8,10 +8,15 @@ use App\Helpers\ResponseHelper;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $categories = Category::all();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Add pagination and select columns
+            $categories = Category::select('id', 'name', 'description')
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Categories retrieved successfully', $categories);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

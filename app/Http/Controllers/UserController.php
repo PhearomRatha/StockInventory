@@ -11,10 +11,16 @@ class UserController extends Controller
     /**
      * Get all users
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $users = User::with('role')->get();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Add pagination and select columns
+            $users = User::select('id', 'name', 'email', 'role_id', 'status', 'created_at')
+                ->with(['role:id,name'])
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Users retrieved successfully', $users);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

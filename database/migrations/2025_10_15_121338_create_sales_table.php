@@ -11,19 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('sales', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('customer_id')->constrained('customers');
-    $table->string('invoice_number')->unique();
-    $table->decimal('total_amount', 10, 2);
-    $table->decimal('discount', 10, 2)->default(0);
-    $table->enum('payment_status', ['paid','unpaid','partial'])->default('unpaid');
-    $table->string('payment_method')->nullable();
-    $table->string('md5')->nullable();
-    $table->string('status')->default('completed');
-    $table->foreignId('sold_by')->constrained('users');
-    $table->timestamps();
-});
+        Schema::create('sales', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('customer_id')->nullable()->constrained('customers');
+            $table->string('invoice_number')->unique();
+            $table->decimal('total_amount', 10, 2);
+            $table->decimal('discount', 10, 2)->default(0);
+            $table->enum('payment_status', ['paid', 'unpaid', 'partial'])->default('unpaid');
+            $table->string('payment_method')->nullable();
+            $table->string('md5')->nullable();
+            $table->string('status')->default('completed');
+            $table->foreignId('sold_by')->constrained('users');
+            $table->timestamps();
+        });
 
     }
 

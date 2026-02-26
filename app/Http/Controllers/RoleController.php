@@ -11,10 +11,15 @@ class RoleController extends Controller
     /**
      * Get all roles
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $roles = Role::all();
+            $perPage = $request->query('per_page', 15);
+            
+            // OPTIMIZED: Add pagination
+            $roles = Role::select('id', 'name', 'description')
+                ->paginate(min($perPage, 100));
+            
             return ResponseHelper::success('Roles retrieved successfully', $roles);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
