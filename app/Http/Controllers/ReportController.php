@@ -134,6 +134,7 @@ class ReportController extends Controller
     }
 
     /**
+     * FIXED: cloned query before count() to avoid query reuse issue
      * Get activity log report
      */
     public function activityLogReport(Request $request)
@@ -150,8 +151,8 @@ class ReportController extends Controller
                 $query->where('type', $type);
             }
             
-            // OPTIMIZED: Get count from database
-            $totalCount = $query->count();
+            // FIXED: Clone query before count to avoid query reuse
+            $totalCount = (clone $query)->count();
             
             // OPTIMIZED: Use pagination instead of getting all
             $logs = $query->with(['user'])

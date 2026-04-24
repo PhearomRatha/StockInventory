@@ -79,12 +79,13 @@ class RoleController extends Controller
     }
 
     /**
+     * FIXED: changed to select('id', 'name')->get() to avoid exposing permissions JSON
      * Get public roles list
      */
     public function publicRoles()
     {
         try {
-            $roles = Role::select('id', 'name', 'description')->get();
+            $roles = Role::select('id', 'name')->get();
             return ResponseHelper::success('Public roles retrieved successfully', $roles);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

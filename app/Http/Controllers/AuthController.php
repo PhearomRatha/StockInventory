@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Helpers\ResponseHelper;
 use App\Models\Roles;
+use App\Models\User;
 use App\Services\TokenService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +25,7 @@ class AuthController extends Controller
     /**
      * Login with email and password
      */
-  public function login(Request $request)
+    public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
@@ -32,32 +33,23 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors(),
-            ], 422);
+            return ResponseHelper::error('Validation failed', 422, $validator->errors());
         }
 
         $result = $this->tokenService
             ->authenticateUser($request->email, $request->password);
 
-        if (!$result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['message'],
-            ], $result['code']);
+        if (! $result['success']) {
+            return ResponseHelper::error($result['message'], $result['code']);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $result['data'],
-        ]);
+        return ResponseHelper::success('Login successful', $result['data']);
     }
 
     /**
      * Login with Google OAuth
      */
- public function googleLogin(Request $request)
+    public function googleLogin(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'token' => 'required|string',
@@ -76,7 +68,7 @@ class AuthController extends Controller
                 ->stateless()
                 ->userFromToken($request->token);
 
-            if (!$googleUser) {
+            if (! $googleUser) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid Google token',
@@ -87,7 +79,7 @@ class AuthController extends Controller
                 ->orWhere('email', $googleUser->getEmail())
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Account not found',
@@ -104,7 +96,7 @@ class AuthController extends Controller
             // Save google_id if first login
             if (empty($user->google_id)) {
                 $user->update([
-                    'google_id' => $googleUser->getId()
+                    'google_id' => $googleUser->getId(),
                 ]);
             }
 
@@ -124,17 +116,17 @@ class AuthController extends Controller
                     ],
                     'token' => $token->plainTextToken,
                     'token_type' => 'Bearer',
-                ]
+                ],
             ]);
 
         } catch (\Exception $e) {
             $errorMessage = $e->getMessage();
-            Log::error('Google Login Error: ' . $errorMessage);
-            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Google Login Error: '.$errorMessage);
+            Log::error('Stack trace: '.$e->getTraceAsString());
 
             // Determine more specific error message
             $message = 'Google login failed';
-            
+
             if (str_contains($errorMessage, 'invalid_grant') || str_contains($errorMessage, 'Invalid token')) {
                 $message = 'Invalid Google token';
             } elseif (str_contains($errorMessage, 'drive.client')) {
@@ -155,8 +147,6 @@ class AuthController extends Controller
         }
     }
 
-
-   
     /**
      * Redirect to Google for OAuth (redirect-based flow - avoids COOP issues)
      */
@@ -173,15 +163,12 @@ class AuthController extends Controller
                 'type' => 'redirect', // Frontend should redirect to this URL
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Google Redirect Error: ' . $e->getMessage());
+            Log::error('Google Redirect Error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to generate Google redirect URL',
-                'debug' => [
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
+                'debug' => app()->environment('local') ? ['error' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()] : null,
             ], 500);
         }
     }
@@ -197,7 +184,7 @@ class AuthController extends Controller
                 ->orWhere('email', $googleUser->getEmail())
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Account not found. Please contact your administrator to create an account for you.',
@@ -241,12 +228,12 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             $errorMessage = $e->getMessage();
-            Log::error('Google callback error: ' . $errorMessage);
-            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Google callback error: '.$errorMessage);
+            Log::error('Stack trace: '.$e->getTraceAsString());
 
             // Determine more specific error message
             $message = 'Google authentication failed';
-            
+
             if (str_contains($errorMessage, 'invalid_grant') || str_contains($errorMessage, 'Invalid token')) {
                 $message = 'Invalid Google token';
             } elseif (str_contains($errorMessage, 'drive.client')) {
@@ -258,11 +245,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $message,
-                'debug' => [
-                    'error' => $errorMessage,
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
+                'debug' => app()->environment('local') ? ['error' => $errorMessage, 'file' => $e->getFile(), 'line' => $e->getLine()] : null,
             ], 500);
         }
     }
@@ -271,10 +254,10 @@ class AuthController extends Controller
     {
         try {
             $user = $request->user();
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Not authenticated'
+                    'message' => 'Not authenticated',
                 ], 401);
             }
 
@@ -282,26 +265,26 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logged out successfully'
+                'message' => 'Logged out successfully',
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Logout error: ' . $e->getMessage());
+            Log::error('Logout error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Logout failed'
+                'message' => 'Logout failed',
             ], 500);
         }
     }
-
 
     public function logoutAll(Request $request)
     {
         try {
             $user = $request->user();
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Not authenticated'
+                    'message' => 'Not authenticated',
                 ], 401);
             }
 
@@ -309,26 +292,26 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logged out from all devices successfully'
+                'message' => 'Logged out from all devices successfully',
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Logout all error: ' . $e->getMessage());
+            Log::error('Logout all error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to logout from all devices'
+                'message' => 'Failed to logout from all devices',
             ], 500);
         }
     }
 
-    
-   public function me(Request $request)
+    public function me(Request $request)
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Not authenticated'
+                'message' => 'Not authenticated',
             ], 401);
         }
 
@@ -336,12 +319,10 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $user
+            'data' => $user,
         ]);
     }
 
-
-  
     public function changePassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -358,7 +339,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        if (!Hash::check($request->current_password, $user->password)) {
+        if (! Hash::check($request->current_password, $user->password)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Current password incorrect',
@@ -366,24 +347,23 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'password' => Hash::make($request->new_password)
+            'password' => Hash::make($request->new_password),
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Password changed successfully'
+            'message' => 'Password changed successfully',
         ]);
     }
 
-   
     public function refreshToken(Request $request)
     {
         try {
             $user = $request->user();
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Not authenticated'
+                    'message' => 'Not authenticated',
                 ], 401);
             }
 
@@ -400,13 +380,14 @@ class AuthController extends Controller
                     'token' => $token->plainTextToken,
                     'token_type' => 'Bearer',
                     'expires_at' => $token->accessToken->expires_at,
-                ]
+                ],
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Refresh token error: ' . $e->getMessage());
+            Log::error('Refresh token error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to refresh token'
+                'message' => 'Failed to refresh token',
             ], 500);
         }
     }
@@ -431,18 +412,18 @@ class AuthController extends Controller
             }
 
             $admin = $request->user();
-            if (!$admin) {
+            if (! $admin) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Not authenticated'
+                    'message' => 'Not authenticated',
                 ], 401);
             }
 
             // Check if admin has permission
-            if (!$admin->isAdmin() && !$admin->isManager()) {
+            if (! $admin->isAdmin() && ! $admin->isManager()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Not authorized'
+                    'message' => 'Not authorized',
                 ], 403);
             }
 
@@ -453,7 +434,7 @@ class AuthController extends Controller
                 if ($targetUser->isAdmin() || $targetUser->isManager()) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Managers cannot reset passwords of Admin or Manager accounts'
+                        'message' => 'Managers cannot reset passwords of Admin or Manager accounts',
                     ], 403);
                 }
             }
@@ -472,10 +453,11 @@ class AuthController extends Controller
             ], 200);
 
         } catch (\Exception $e) {
-            Log::error('Admin reset password error: ' . $e->getMessage());
+            Log::error('Admin reset password error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to reset password'
+                'message' => 'Failed to reset password',
             ], 500);
         }
     }
@@ -487,77 +469,75 @@ class AuthController extends Controller
     {
         try {
             $roles = Roles::all();
+
             return response()->json([
                 'success' => true,
                 'data' => $roles,
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Get roles error: ' . $e->getMessage());
+            Log::error('Get roles error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get roles'
+                'message' => 'Failed to get roles',
             ], 500);
         }
     }
 
+    public function register(Request $request)
+    {
+        try {
+            // Validate the request with strong password requirements
+            $validatedData = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+                'password' => [
+                    'required',
+                    'confirmed',
+                    Password::min(8)->mixedCase()->numbers(),
+                ],
+                'password_confirmation' => ['required', 'string'],
+            ]);
 
-   public function register(Request $request)
-   {
-       try {
-           // Validate the request with strong password requirements
-           $validatedData = $request->validate([
-               'name' => ['required', 'string', 'max:255'],
-               'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-               'password' => [
-                   'required',
-                   'confirmed',
-                   Password::min(8)->mixedCase()->numbers()
-               ],
-               'password_confirmation' => ['required', 'string'],
-           ]);
+            // Get the default Staff role
+            $staffRole = Roles::where('name', Roles::ROLE_STAFF)->first();
 
-           // Get the default Staff role
-           $staffRole = Roles::where('name', Roles::ROLE_STAFF)->first();
-           
-           if (!$staffRole) {
-               return response()->json([
-                   'success' => false,
-                   'message' => 'Default role not found. Please contact administrator.'
-               ], 500);
-           }
+            if (! $staffRole) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Default role not found. Please contact administrator.',
+                ], 500);
+            }
 
-           // Create the user with default Staff role
-           $user = User::create([
-               'name' => $validatedData['name'],
-               'email' => $validatedData['email'],
-               'password' => Hash::make($validatedData['password']),
-               'role_id' => $staffRole->id,
-               'status' => User::STATUS_ACTIVE,
-           ]);
+            // Create the user with default Staff role
+            $user = User::create([
+                'name' => $validatedData['name'],
+                'email' => $validatedData['email'],
+                'password' => Hash::make($validatedData['password']),
+                'role_id' => $staffRole->id,
+                'status' => User::STATUS_ACTIVE,
+            ]);
 
-           return response()->json([
-               'success' => true,
-               'message' => 'User registered successfully',
-               'user' => $user
-           ], 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'User registered successfully',
+                'user' => $user,
+            ], 201);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        // Validation failed
-        return response()->json([
-            'success' => false,
-            'errors' => $e->errors()
-        ], 422);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Validation failed
+            return response()->json([
+                'success' => false,
+                'errors' => $e->errors(),
+            ], 422);
 
-    } catch (\Throwable $th) {
-        // Other errors
-        return response()->json([
-            'success' => false,
-            'message' => 'Registration failed',
-            'error' => $th->getMessage()
-        ], 500);
+        } catch (\Throwable $th) {
+            // Other errors
+            return response()->json([
+                'success' => false,
+                'message' => 'Registration failed',
+                'error' => $th->getMessage(),
+            ], 500);
+        }
     }
 }
-}
-
-
-

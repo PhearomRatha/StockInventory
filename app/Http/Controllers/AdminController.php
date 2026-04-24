@@ -33,6 +33,7 @@ class AdminController extends Controller
     }
 
     /**
+     * FIXED: used with('user') to avoid double query
      * Approve a user
      */
     public function approveUser(Request $request)
@@ -43,8 +44,9 @@ class AdminController extends Controller
                 'role_id' => 'required|exists:roles,id'
             ]);
 
-            $userRequest = UserRequest::where('user_id', $validated['user_id'])->firstOrFail();
-            $user = User::findOrFail($validated['user_id']);
+            // FIXED: Use with('user') to avoid double query
+            $userRequest = UserRequest::with('user')->where('user_id', $validated['user_id'])->firstOrFail();
+            $user = $userRequest->user;
 
             $user->status = 'active';
             $user->role_id = $validated['role_id'];
@@ -65,6 +67,7 @@ class AdminController extends Controller
     }
 
     /**
+     * FIXED: used with('user') to avoid double query
      * Reject a user
      */
     public function rejectUser(Request $request)
@@ -75,8 +78,9 @@ class AdminController extends Controller
                 'reason' => 'nullable|string'
             ]);
 
-            $userRequest = UserRequest::where('user_id', $validated['user_id'])->firstOrFail();
-            $user = User::findOrFail($validated['user_id']);
+            // FIXED: Use with('user') to avoid double query
+            $userRequest = UserRequest::with('user')->where('user_id', $validated['user_id'])->firstOrFail();
+            $user = $userRequest->user;
 
             $user->status = 'rejected';
             $user->save();
@@ -172,6 +176,7 @@ class AdminController extends Controller
     }
 
     /**
+     * FIXED: used with('user') to avoid double query
      * Approve user request
      */
     public function approveUserRequest(Request $request)
@@ -182,8 +187,9 @@ class AdminController extends Controller
                 'role_id' => 'required|exists:roles,id'
             ]);
 
-            $userRequest = UserRequest::findOrFail($validated['request_id']);
-            $user = User::findOrFail($userRequest->user_id);
+            // FIXED: Use with('user') to avoid double query
+            $userRequest = UserRequest::with('user')->findOrFail($validated['request_id']);
+            $user = $userRequest->user;
 
             $user->status = 'active';
             $user->role_id = $validated['role_id'];
@@ -203,6 +209,10 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * FIXED: used with('user') to avoid double query
+     * Reject user request
+     */
     public function rejectUserRequest(Request $request)
     {
         try {
@@ -211,8 +221,9 @@ class AdminController extends Controller
                 'reason' => 'nullable|string'
             ]);
 
-            $userRequest = UserRequest::findOrFail($validated['request_id']);
-            $user = User::findOrFail($userRequest->user_id);
+            // FIXED: Use with('user') to avoid double query
+            $userRequest = UserRequest::with('user')->findOrFail($validated['request_id']);
+            $user = $userRequest->user;
 
             $user->status = 'rejected';
             $user->save();

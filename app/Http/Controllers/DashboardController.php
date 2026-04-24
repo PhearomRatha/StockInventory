@@ -44,7 +44,7 @@ class DashboardController extends Controller
                     (SELECT SUM(total_amount) FROM sales) AS total_revenue,
                     (SELECT COUNT(*) FROM customers)  AS total_customers,
                     (SELECT COUNT(*) FROM suppliers)  AS total_suppliers,
-                    (SELECT COUNT(*) FROM products WHERE is_low_stock = 1) AS low_stock_count,
+                    (SELECT COUNT(*) FROM products WHERE is_low_stock = true) AS low_stock_count,
                     (SELECT COUNT(*) FROM products WHERE stock_quantity = 0) AS out_of_stock_count,
                     (SELECT SUM(quantity) FROM stock_ins)  AS total_stock_ins,
                     (SELECT SUM(quantity) FROM stock_outs) AS total_stock_outs
@@ -54,44 +54,44 @@ class DashboardController extends Controller
 
             // Revenue - current & last month in one query
             $revenueComparison = Sales::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN total_amount ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN total_amount ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total_amount ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total_amount ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // Sales count - current & last month in one query
             $salesComparison = Sales::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // Stock In - current & last month in one query
             $stockInComparison = Stock_ins::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN quantity ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN quantity ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // Stock Out - current & last month in one query
             $stockOutComparison = Stock_outs::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN quantity ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN quantity ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // New Customers - current & last month in one query
             $customersComparison = Customers::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // New Suppliers - current & last month in one query
             $suppliersComparison = Suppliers::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // New Products - current & last month in one query
             $productsComparison = Products::selectRaw("
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS current_month,
-                SUM(CASE WHEN MONTH(created_at) = ? AND YEAR(created_at) = ? THEN 1 ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // ==================== PERCENTAGE DISTRIBUTIONS (JOIN instead of double query) ====================

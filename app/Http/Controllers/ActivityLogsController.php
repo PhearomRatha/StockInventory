@@ -27,6 +27,7 @@ class ActivityLogsController extends Controller
     }
 
     /**
+     * FIXED: cloned query before count() to avoid query reuse issue
      * Filter activity logs
      */
     public function filter(Request $request)
@@ -42,10 +43,10 @@ class ActivityLogsController extends Controller
                 $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
             }
 
-            // OPTIMIZED: Use count() directly and add limit
-            $totalCount = $query->count();
+            // FIXED: Clone query before count to avoid query reuse
+            $totalCount = (clone $query)->count();
             
-            $logs = $query->with(['user'])
+            $logs = $query->with(['user:id,name'])
                 ->latest()
                 ->limit(100) // Cap at 100 records
                 ->get();

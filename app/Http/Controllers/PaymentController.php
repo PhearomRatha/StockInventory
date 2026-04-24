@@ -13,13 +13,15 @@ use Illuminate\Support\Facades\DB;
 class PaymentController extends Controller
 {
     /**
+     * FIXED: added select() and with() for better performance
      * Get all payments
      */
     public function index()
     {
         try {
             // OPTIMIZED: Add pagination to prevent returning too many records
-            $payments = Payment::with(['recordedBy'])
+            $payments = Payment::select('id', 'reference_type', 'reference_id', 'amount', 'payment_type', 'payment_method', 'paid_to_from', 'payment_date', 'status', 'recorded_by')
+                ->with(['recordedBy:id,name'])
                 ->latest()
                 ->limit(100)
                 ->get();

@@ -17,7 +17,7 @@ class StockOutsController extends Controller
             $perPage = $request->query('per_page', 15);
             
             // OPTIMIZED: Use pagination + select columns
-            $stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'date', 'notes', 'created_at')
+            $stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'sold_date', 'remarks', 'created_at')
                 ->with([
                     'product:id,name,sku',
                     'customer:id,name,email'
@@ -52,8 +52,8 @@ class StockOutsController extends Controller
                 'product_id' => 'required|exists:products,id',
                 'customer_id' => 'nullable|exists:customers,id',
                 'quantity' => 'required|integer|min:1',
-                'date' => 'required|date',
-                'notes' => 'nullable|string'
+                'sold_date' => 'required|date',
+                'remarks' => 'nullable|string'
             ]);
 
             // OPTIMIZED: Check stock and create in optimized way
@@ -90,8 +90,8 @@ class StockOutsController extends Controller
                 'product_id' => 'sometimes|required|exists:products,id',
                 'customer_id' => 'nullable|exists:customers,id',
                 'quantity' => 'sometimes|required|integer|min:1',
-                'date' => 'sometimes|required|date',
-                'notes' => 'nullable|string'
+                'sold_date' => 'sometimes|required|date',
+                'remarks' => 'nullable|string'
             ]);
 
             $stockOut->update($validated);
@@ -120,13 +120,21 @@ class StockOutsController extends Controller
         }
     }
 
+    /**
+     * FIXED: added column selection for product and customer relationships
+     * Get dashboard data
+     */
     public function dashboardData()
     {
         try {
             // OPTIMIZED: Cache dashboard for 5 minutes
             $data = Cache::remember('stock_out_dashboard', 300, function () {
                 $totalStockOut = StockOut::sum('quantity');
-                $stockOuts = StockOut::with(['product', 'customer'])->latest()->take(10)->get();
+                $stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'sold_date', 'remarks', 'created_at')
+                    ->with(['product:id,name,sku,price', 'customer:id,name,phone,email'])
+                    ->latest()
+                    ->take(10)
+                    ->get();
                 
                 return [
                     'total_stock_out' => $totalStockOut,
@@ -140,10 +148,14 @@ class StockOutsController extends Controller
         }
     }
 
+    /**
+     * FIXED: added column selection for product and customer relationships
+     * Get receipt
+     */
     public function receipt($id)
     {
         try {
-            $stockOut = StockOut::with(['product', 'customer'])->findOrFail($id);
+            $stockOut = StockOut::with(['product:id,name,sku,price', 'customer:id,name,phone,email'])->findOrFail($id);
             return ResponseHelper::success('Receipt retrieved successfully', $stockOut);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());

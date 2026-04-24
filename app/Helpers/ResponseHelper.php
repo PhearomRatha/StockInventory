@@ -5,12 +5,12 @@ namespace App\Helpers;
 class ResponseHelper
 {
     /**
-     * Success response
+     * Success response - STANDARDIZED FORMAT
      */
     public static function success($message = 'Success', $data = null, $statusCode = 200)
     {
         $response = [
-            'status' => $statusCode,
+            'success' => true,
             'message' => $message,
         ];
 
@@ -22,12 +22,12 @@ class ResponseHelper
     }
 
     /**
-     * Error response
+     * Error response - STANDARDIZED FORMAT
      */
     public static function error($message = 'Error', $statusCode = 500, $errors = null)
     {
         $response = [
-            'status' => $statusCode,
+            'success' => false,
             'message' => $message,
         ];
 
@@ -39,12 +39,12 @@ class ResponseHelper
     }
 
     /**
-     * Paginated response
+     * Paginated response - STANDARDIZED FORMAT
      */
     public static function paginated($data, $message = 'Data retrieved successfully')
     {
         return response()->json([
-            'status' => 200,
+            'success' => true,
             'message' => $message,
             'data' => $data->items(),
             'pagination' => [
@@ -52,7 +52,7 @@ class ResponseHelper
                 'last_page' => $data->lastPage(),
                 'per_page' => $data->perPage(),
                 'total' => $data->total(),
-            ]
-        ]);
+            ],
+        ], 200);
     }
 }

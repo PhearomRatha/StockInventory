@@ -30,54 +30,63 @@ class User extends Authenticatable
      * Role constants
      */
     public const ROLE_ADMIN = 'Admin';
+
     public const ROLE_MANAGER = 'Manager';
+
     public const ROLE_STAFF = 'Staff';
 
     /**
      * Status constants
      */
     public const STATUS_ACTIVE = 'ACTIVE';
+
     public const STATUS_INACTIVE = 'INACTIVE';
 
     /**
      * Role relationship
      */
-    public function role() {
+    public function role()
+    {
         return $this->belongsTo(Roles::class);
     }
 
     /**
      * Stock ins relationship
      */
-    public function stockIns() {
+    public function stockIns()
+    {
         return $this->hasMany(Stock_ins::class, 'received_by');
     }
 
     /**
      * Stock outs relationship
      */
-    public function stockOuts() {
+    public function stockOuts()
+    {
         return $this->hasMany(Stock_outs::class, 'sold_by');
     }
 
     /**
      * Sales relationship
      */
-    public function sales() {
+    public function sales()
+    {
         return $this->hasMany(Sales::class, 'sold_by');
     }
 
     /**
      * Payments relationship
      */
-    public function payments() {
+    public function payments()
+    {
         return $this->hasMany(Payments::class, 'recorded_by');
     }
 
     /**
      * Activity logs relationship
      */
-    public function activityLogs() {
+    public function activityLogs()
+    {
         return $this->hasMany(Activity_logs::class);
     }
 
@@ -114,6 +123,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user can perform an ability (alias for PermissionService)
+     */
+    public function canPerform(string $ability): bool
+    {
+        return \App\Services\PermissionService::can($this, $ability);
+    }
+
+    /**
+     * Get all permissions for this user
+     */
+    public function getPermissions(): array
+    {
+        return \App\Services\PermissionService::getPermissions($this);
+    }
+
+    /**
      * Check if user is active
      */
     public function isActive(): bool
@@ -126,7 +151,7 @@ class User extends Authenticatable
      */
     public function hasPassword(): bool
     {
-        return !empty($this->password);
+        return ! empty($this->password);
     }
 
     /**
@@ -134,7 +159,7 @@ class User extends Authenticatable
      */
     public function isGoogleUser(): bool
     {
-        return !empty($this->google_id);
+        return ! empty($this->google_id);
     }
 
     /**
