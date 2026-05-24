@@ -7,33 +7,45 @@ use App\Helpers\ResponseHelper;
 use App\Models\Customers as Customer;
 use App\Models\Products as Product;
 use App\Models\Sales as Sale;
+use App\Http\Requests\StoreSaleRequest;
+use App\Services\InventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SalesController extends Controller
 {
+    public function __construct(protected InventoryService $inventoryService)
+    {
+    }
+
     public function index(Request $request)
     {
         try {
             $perPage = min($request->query('per_page', 15), 100);
 
-            $sales = Sale::select(
-                'id',
-                'customer_id',
-                'sold_by',
-                'invoice_number',
-                'total_amount',
-                'payment_status',
-                'payment_method',
-                'status',
-                'created_at'
-            )
-                ->with([
-                    'customer:id,name',
-                    'soldBy:id,name',
-                ])
-                ->latest()
-                ->paginate($perPage);
+              $sales = Sale::select(
+                  'id',
+                  'customer_id',
+                  'warehouse_id',
+                  'sold_by',
+                  'invoice_number',
+                  'subtotal',
+                  'discount',
+                  'tax',
+                  'total',
+                  'payment_status',
+                  'payment_method',
+                  'notes',
+                  'sold_at',
+                  'created_at'
+              )
+                 ->with([
+                     'customer:id,name',
+                     'soldBy:id,name',
+                     'warehouse:id,name,code',
+                 ])
+                 ->latest()
+                 ->paginate($perPage);
 
             return ResponseHelper::success('Sales retrieved successfully', $sales);
         } catch (\Exception $e) {
@@ -47,7 +59,8 @@ class SalesController extends Controller
             $sale = Sale::with([
                 'customer:id,name,email',
                 'soldBy:id,name',
-                'saleItems.product:id,name,price',
+                'warehouse:id,name,code',
+                'saleItems.product:id,name,price,sku',
             ])
                 ->findOrFail($id);
 
@@ -61,65 +74,78 @@ class SalesController extends Controller
     {
         try {
             $user = $request->user();
-
             $validated = $request->validated();
+            $warehouseId = (int) $validated['warehouse_id'];
 
-            $sale = DB::transaction(function () use ($validated, $user) {
+            $sale = DB::transaction(function () use ($validated, $user, $warehouseId) {
+                $productIds = collect($validated['items'])->pluck('product_id')->unique();
+                $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
-                $productIds = collect($validated['items'])->pluck('product_id');
-                $products = Product::whereIn('id', $productIds)->lockForUpdate()->get()->keyBy('id');
-
-                $totalAmount = 0;
-                $saleItems = [];
+                $subtotal = 0;
+                $saleItemsData = [];
 
                 foreach ($validated['items'] as $item) {
-
                     $product = $products->get($item['product_id']);
-
                     if (! $product) {
                         throw new \Exception('Product not found.');
                     }
 
-                    if ($product->stock_quantity < $item['quantity']) {
-                        throw new \Exception("Insufficient stock for {$product->name}");
-                    }
+                    $qty = (float) $item['quantity'];
+                    $unitPrice = (float) $product->price;
+                    $itemTotal = $unitPrice * $qty;
+                    $subtotal += $itemTotal;
 
-                    $itemTotal = $product->price * $item['quantity'];
-                    $totalAmount += $itemTotal;
-
-                    $saleItems[] = [
+                    $saleItemsData[] = [
                         'product_id' => $product->id,
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $product->price,
+                        'quantity' => $qty,
+                        'unit_price' => $unitPrice,
+                        'discount' => 0,
                         'total' => $itemTotal,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
 
-                    $product->decrement('stock_quantity', $item['quantity']);
+                    // Use InventoryService: will check, decrease warehouse_product qty, create STOCK_TRANSACTION type=SALE
+                    $this->inventoryService->decreaseStock(
+                        $product->id,
+                        $qty,
+                        $warehouseId,
+                        \App\Models\StockTransaction::TYPE_SALE,
+                        'Sale deduction',
+                        $user->id,
+                        null,
+                        'sale'
+                    );
                 }
 
-                $invoiceNumber = 'INV-'.now()->format('YmdHis').'-'.rand(1000, 9999);
+                $invoiceNumber = 'INV-' . now()->format('YmdHis') . '-' . rand(1000, 9999);
+                $discount = (float) ($validated['discount'] ?? 0);
+                $tax = (float) ($validated['tax'] ?? 0);
+                $total = $subtotal - $discount + $tax;
 
                 $sale = Sale::create([
                     'customer_id' => $validated['customer_id'] ?? null,
-                    'sold_by' => $user->id,
+                    'warehouse_id' => $warehouseId,
                     'invoice_number' => $invoiceNumber,
-                    'total_amount' => $totalAmount,
-                    'status' => 'pending',
-                    'payment_status' => 'unpaid',
+                    'subtotal' => $subtotal,
+                    'discount' => $discount,
+                    'tax' => $tax,
+                    'total' => $total,
+                    'payment_status' => 'UNPAID',
+                    'payment_method' => $validated['payment_method'] ?? null,
                     'notes' => $validated['notes'] ?? null,
+                    'sold_by' => $user->id,
+                    'sold_at' => now(),
                 ]);
 
-                $sale->saleItems()->createMany($saleItems);
+                $sale->saleItems()->createMany($saleItemsData);
 
-                ActivityLogHelper::log('sale', "Created Sale #{$sale->id}");
+                ActivityLogHelper::log('sale', "Created Sale #{$sale->id} in warehouse {$warehouseId}");
 
-                return $sale;
+                return $sale->load('saleItems.product:id,name', 'customer:id,name', 'soldBy:id,name', 'warehouse:id,name');
             });
 
             return ResponseHelper::success('Sale created successfully', $sale, 201);
-
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
@@ -141,11 +167,13 @@ class SalesController extends Controller
         try {
             $search = $request->query('search');
 
-            $products = Product::select('id', 'name', 'price', 'stock_quantity')
+            // Use warehouse_products sum for current stock (new schema)
+            $products = Product::select('products.id', 'products.name', 'products.price')
+                ->withSum('warehouseProducts as stock_quantity', 'quantity')
                 ->when($search, function ($query) use ($search) {
-                    $query->where('name', 'like', "%{$search}%");
+                    $query->where('products.name', 'like', "%{$search}%");
                 })
-                ->where('stock_quantity', '>', 0)
+                ->having('stock_quantity', '>', 0)
                 ->paginate(20);
 
             return ResponseHelper::success('Products retrieved', $products);

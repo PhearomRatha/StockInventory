@@ -2,30 +2,36 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Stock_outs as StockOut;
-use App\Models\Products as Product;
 use App\Helpers\ResponseHelper;
-use App\Helpers\ActivityLogHelper;
-use Illuminate\Support\Facades\Cache;
+use App\Models\StockTransaction;
+use App\Services\InventoryService;
+use Illuminate\Http\Request;
 
 class StockOutsController extends Controller
 {
+    public function __construct(protected InventoryService $inventoryService)
+    {
+    }
+
     public function index(Request $request)
     {
         try {
-            $perPage = $request->query('per_page', 15);
-            
-            // OPTIMIZED: Use pagination + select columns
-            $stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'sold_date', 'remarks', 'created_at')
-                ->with([
-                    'product:id,name,sku',
-                    'customer:id,name,email'
-                ])
-                ->latest()
-                ->paginate(min($perPage, 100));
-            
-            return ResponseHelper::success('Stock outs retrieved successfully', $stockOuts);
+            $perPage = min($request->query('per_page', 15), 100);
+
+            $query = StockTransaction::with([
+                'product:id,name,sku,price',
+                'warehouse:id,name,code',
+                'creator:id,name',
+            ])->where('type', StockTransaction::TYPE_SALE)->latest();
+
+            if ($request->filled('warehouse_id')) {
+                $query->where('warehouse_id', $request->query('warehouse_id'));
+            }
+
+            return ResponseHelper::success(
+                'Stock outs retrieved successfully',
+                $query->paginate($perPage)
+            );
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
@@ -34,12 +40,13 @@ class StockOutsController extends Controller
     public function show($id)
     {
         try {
-            // OPTIMIZED: Select columns for relationships
-            $stockOut = StockOut::with([
-                'product:id,name,sku,price',
-                'customer:id,name,email,phone'
-            ])->findOrFail($id);
-            return ResponseHelper::success('Stock out retrieved successfully', $stockOut);
+            $transaction = StockTransaction::with([
+                'product',
+                'warehouse',
+                'creator:id,name,email',
+            ])->where('type', StockTransaction::TYPE_SALE)->findOrFail($id);
+
+            return ResponseHelper::success('Stock out retrieved successfully', $transaction);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
@@ -49,114 +56,80 @@ class StockOutsController extends Controller
     {
         try {
             $validated = $request->validate([
-                'product_id' => 'required|exists:products,id',
+                'warehouse_id' => 'required|exists:warehouses,id',
                 'customer_id' => 'nullable|exists:customers,id',
-                'quantity' => 'required|integer|min:1',
-                'sold_date' => 'required|date',
-                'remarks' => 'nullable|string'
+                'items' => 'required|array',
+                'items.*.product_id' => 'required|exists:products,id',
+                'items.*.quantity' => 'required|numeric|min:1',
+                'reason' => 'nullable|string',
+                'notes' => 'nullable|string',
             ]);
 
-            // OPTIMIZED: Check stock and create in optimized way
-            $product = Product::findOrFail($validated['product_id']);
+            $stockOut = $this->inventoryService->createStockOut(
+                (int) $validated['warehouse_id'],
+                $validated['items'],
+                $validated['reason'] ?? null,
+                $validated['notes'] ?? null,
+                $request->user()->id
+            );
 
-            if ($product->stock_quantity < $validated['quantity']) {
-                return ResponseHelper::error('Insufficient stock', null, 422);
-            }
-
-            $stockOut = StockOut::create($validated);
-
-            // OPTIMIZED: Use decrement for atomic update
-            Product::where('id', $validated['product_id'])
-                ->decrement('stock_quantity', $validated['quantity']);
-
-            ActivityLogHelper::log('stock_out', "Stock Out: {$validated['quantity']} units of {$product->name}");
-
-            // Clear caches
-            Cache::forget('stock_out_dashboard');
-            Cache::forget('stock_report');
-
-            return ResponseHelper::success('Stock out created successfully', $stockOut, 201);
+            return ResponseHelper::success('Stock out recorded successfully', $stockOut, 201);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
     }
 
-    public function update(Request $request, $id)
+    public function dashboard()
     {
         try {
-            $stockOut = StockOut::findOrFail($id);
+            $products = \App\Models\Products::select('id', 'name', 'sku', 'price')
+                ->withSum('warehouseProducts as total_qty', 'quantity')
+                ->get();
 
-            $validated = $request->validate([
-                'product_id' => 'sometimes|required|exists:products,id',
-                'customer_id' => 'nullable|exists:customers,id',
-                'quantity' => 'sometimes|required|integer|min:1',
-                'sold_date' => 'sometimes|required|date',
-                'remarks' => 'nullable|string'
+            $customers = \App\Models\Customers::select('id', 'name', 'email', 'phone')
+                ->get();
+
+            $users = \App\Models\User::select('id', 'name', 'email')
+                ->get();
+
+            $stockOuts = StockTransaction::with(['product:id,name,sku,price', 'warehouse:id,name,code', 'creator:id,name'])
+                ->where('type', StockTransaction::TYPE_SALE)
+                ->latest()
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'customer_id' => null,
+                        'customer_name' => 'N/A',
+                        'product_id' => $item->product_id,
+                        'product_name' => $item->product->name ?? 'N/A',
+                        'quantity' => (float) $item->quantity,
+                        'unit_price' => (float) $item->unit_cost,
+                        'total_amount' => (float) $item->total_cost,
+                        'date' => $item->created_at?->format('Y-m-d'),
+                        'notes' => $item->notes,
+                    ];
+                });
+
+            return ResponseHelper::success('Stock out dashboard retrieved successfully', [
+                'products' => $products,
+                'customers' => $customers,
+                'users' => $users,
+                'stockOuts' => $stockOuts,
             ]);
-
-            $stockOut->update($validated);
-            
-            // Clear caches
-            Cache::forget('stock_out_dashboard');
-
-            return ResponseHelper::success('Stock out updated successfully', $stockOut);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }
     }
 
-    public function destroy($id)
-    {
-        try {
-            $stockOut = StockOut::findOrFail($id);
-            $stockOut->delete();
-            
-            // Clear caches
-            Cache::forget('stock_out_dashboard');
-            
-            return ResponseHelper::success('Stock out deleted successfully');
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
-    }
-
-    /**
-     * FIXED: added column selection for product and customer relationships
-     * Get dashboard data
-     */
-    public function dashboardData()
-    {
-        try {
-            // OPTIMIZED: Cache dashboard for 5 minutes
-            $data = Cache::remember('stock_out_dashboard', 300, function () {
-                $totalStockOut = StockOut::sum('quantity');
-                $stockOuts = StockOut::select('id', 'product_id', 'customer_id', 'quantity', 'sold_date', 'remarks', 'created_at')
-                    ->with(['product:id,name,sku,price', 'customer:id,name,phone,email'])
-                    ->latest()
-                    ->take(10)
-                    ->get();
-                
-                return [
-                    'total_stock_out' => $totalStockOut,
-                    'recent_stock_outs' => $stockOuts
-                ];
-            });
-            
-            return ResponseHelper::success('Stock out dashboard data retrieved successfully', $data);
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
-    }
-
-    /**
-     * FIXED: added column selection for product and customer relationships
-     * Get receipt
-     */
     public function receipt($id)
     {
         try {
-            $stockOut = StockOut::with(['product:id,name,sku,price', 'customer:id,name,phone,email'])->findOrFail($id);
-            return ResponseHelper::success('Receipt retrieved successfully', $stockOut);
+            $transaction = StockTransaction::with(['product', 'warehouse', 'creator:id,name'])
+                ->where('type', StockTransaction::TYPE_SALE)
+                ->findOrFail($id);
+
+            return ResponseHelper::success('Receipt retrieved successfully', $transaction);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }

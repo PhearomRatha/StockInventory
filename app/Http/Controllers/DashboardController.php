@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Models\Products;
 use App\Models\Sales;
-use App\Models\Stock_ins;
-use App\Models\Stock_outs;
+use App\Models\StockTransaction;
 use App\Models\Customers;
 use App\Models\Suppliers;
 use App\Models\User;
+use App\Models\WarehouseProduct;
 use App\Helpers\ResponseHelper;
 
 class DashboardController extends Controller
@@ -41,21 +41,21 @@ class DashboardController extends Controller
                     (SELECT COUNT(*) FROM products)   AS total_products,
                     (SELECT COUNT(*) FROM users)      AS total_users,
                     (SELECT COUNT(*) FROM sales)      AS total_sales,
-                    (SELECT SUM(total_amount) FROM sales) AS total_revenue,
+                    (SELECT COALESCE(SUM(total), 0) FROM sales) AS total_revenue,
                     (SELECT COUNT(*) FROM customers)  AS total_customers,
                     (SELECT COUNT(*) FROM suppliers)  AS total_suppliers,
-                    (SELECT COUNT(*) FROM products WHERE is_low_stock = true) AS low_stock_count,
-                    (SELECT COUNT(*) FROM products WHERE stock_quantity = 0) AS out_of_stock_count,
-                    (SELECT SUM(quantity) FROM stock_ins)  AS total_stock_ins,
-                    (SELECT SUM(quantity) FROM stock_outs) AS total_stock_outs
+                    (SELECT COUNT(*) FROM warehouse_products WHERE quantity <= 5) AS low_stock_count,
+                    (SELECT COUNT(*) FROM warehouse_products WHERE quantity = 0) AS out_of_stock_count,
+                    (SELECT COALESCE(SUM(quantity), 0) FROM stock_transactions WHERE type = 'PURCHASE')  AS total_stock_ins,
+                    (SELECT COALESCE(SUM(quantity), 0) FROM stock_transactions WHERE type = 'SALE') AS total_stock_outs
             ");
 
             // ==================== MONTH-OVER-MONTH (single query each) ====================
 
             // Revenue - current & last month in one query
             $revenueComparison = Sales::selectRaw("
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total_amount ELSE 0 END) AS current_month,
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total_amount ELSE 0 END) AS last_month
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN total ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // Sales count - current & last month in one query
@@ -64,16 +64,16 @@ class DashboardController extends Controller
                 SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN 1 ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
-            // Stock In - current & last month in one query
-            $stockInComparison = Stock_ins::selectRaw("
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS current_month,
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS last_month
+            // Stock In (PURCHASE) - current & last month in one query
+            $stockInComparison = StockTransaction::selectRaw("
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? AND type = 'PURCHASE' THEN quantity ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? AND type = 'PURCHASE' THEN quantity ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
-            // Stock Out - current & last month in one query
-            $stockOutComparison = Stock_outs::selectRaw("
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS current_month,
-                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? THEN quantity ELSE 0 END) AS last_month
+            // Stock Out (SALE) - current & last month in one query
+            $stockOutComparison = StockTransaction::selectRaw("
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? AND type = 'SALE' THEN quantity ELSE 0 END) AS current_month,
+                SUM(CASE WHEN EXTRACT(MONTH FROM created_at) = ? AND EXTRACT(YEAR FROM created_at) = ? AND type = 'SALE' THEN quantity ELSE 0 END) AS last_month
             ", [$currentMonth, $currentYear, $lastMonth, $lastYear])->first();
 
             // New Customers - current & last month in one query
@@ -97,7 +97,7 @@ class DashboardController extends Controller
             // ==================== PERCENTAGE DISTRIBUTIONS (JOIN instead of double query) ====================
 
             // Customer Sales Distribution - single JOIN query
-            $customerSalesData = Sales::selectRaw('sales.customer_id, customers.name AS customer_name, SUM(sales.total_amount) AS total')
+            $customerSalesData = Sales::selectRaw('sales.customer_id, customers.name AS customer_name, SUM(sales.total) AS total')
                 ->join('customers', 'sales.customer_id', '=', 'customers.id')
                 ->groupBy('sales.customer_id', 'customers.name')
                 ->get();
@@ -115,10 +115,12 @@ class DashboardController extends Controller
                 ->values()
                 ->toArray();
 
-            // Product Sales Distribution - single JOIN query
-            $productSalesData = Stock_outs::selectRaw('stock_outs.product_id, products.name AS product_name, SUM(stock_outs.total_amount) AS total_sales, SUM(stock_outs.quantity) AS total_quantity')
-                ->join('products', 'stock_outs.product_id', '=', 'products.id')
-                ->groupBy('stock_outs.product_id', 'products.name')
+            // Product Sales Distribution - single JOIN query from sale_items (new schema)
+            $productSalesData = DB::table('sale_items')
+                ->join('products', 'sale_items.product_id', '=', 'products.id')
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->selectRaw('sale_items.product_id, products.name AS product_name, SUM(sale_items.total) AS total_sales, SUM(sale_items.quantity) AS total_quantity')
+                ->groupBy('sale_items.product_id', 'products.name')
                 ->get();
 
             $totalProductSales = $productSalesData->sum('total_sales');
@@ -135,11 +137,8 @@ class DashboardController extends Controller
                 ->values()
                 ->toArray();
 
-            // Supplier Distribution - single JOIN query
-            $supplierStockIns = Stock_ins::selectRaw('stock_ins.supplier_id, suppliers.name AS supplier_name, SUM(stock_ins.quantity) AS total_quantity, SUM(stock_ins.total_cost) AS total_cost')
-                ->join('suppliers', 'stock_ins.supplier_id', '=', 'suppliers.id')
-                ->groupBy('stock_ins.supplier_id', 'suppliers.name')
-                ->get();
+            // Supplier Distribution - legacy removed, purchases no longer track supplier directly in stock_tx (use products.supplier_id if needed)
+            $supplierStockIns = collect([]);
 
             $totalSupplierQty = $supplierStockIns->sum('total_quantity');
             $supplierPercentages = $supplierStockIns
@@ -160,22 +159,116 @@ class DashboardController extends Controller
             $stockInPercentage  = $totalStockMovement > 0 ? round(($overviewCounts->total_stock_ins  / $totalStockMovement) * 100, 2) : 0;
             $stockOutPercentage = $totalStockMovement > 0 ? round(($overviewCounts->total_stock_outs / $totalStockMovement) * 100, 2) : 0;
 
+            // ==================== SALES OVERVIEW CHART (line chart data) ====================
+            $monthlySales = Sales::query()
+                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, SUM(total) as total")
+                ->where('created_at', '>=', now()->subMonths(11))
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon')")
+                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->get();
+
+            // ==================== STOCK IN vs STOCK OUT CHART (bar chart data) ====================
+            $monthlyStock = StockTransaction::query()
+                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, type, SUM(quantity) as total_quantity")
+                ->whereIn('type', ['PURCHASE', 'SALE'])
+                ->where('created_at', '>=', now()->subMonths(11))
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon'), type")
+                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->get();
+
+            // ==================== CUSTOMER GROWTH CHART (line chart data) ====================
+            $monthlyCustomers = Customers::query()
+                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, COUNT(*) as total")
+                ->where('created_at', '>=', now()->subMonths(11))
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon')")
+                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->get();
+
             // ==================== RECENT SALES & TOP PRODUCTS ====================
-            $recentSales = Sales::select('id', 'customer_id', 'sold_by', 'total_amount', 'payment_status', 'created_at')
+            $recentSales = Sales::select('id', 'customer_id', 'sold_by', 'total', 'payment_status', 'created_at')
                 ->with(['customer:id,name'])
                 ->latest()
                 ->take(5)
                 ->get();
 
-            $topProducts = Products::select('id', 'name', 'stock_quantity', 'price')
-                ->orderBy('stock_quantity', 'desc')
+            $topProducts = Products::select('id', 'name', 'price')
+                ->orderBy('price', 'desc')
                 ->take(5)
-                ->get();
+                ->get()
+                ->map(function ($p) {
+                    $p->stock_quantity = $p->total_stock;
+                    return $p;
+                });
 
-            // ==================== HELPERS ====================
+            // ==================== HELPER ====================
             $pctChange = fn($current, $last) => $last > 0
                 ? round((($current - $last) / $last) * 100, 2)
                 : ($current > 0 ? 100 : 0);
+
+            // ==================== BUILD SALES OVERVIEW CHART DATA ====================
+            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            $salesOverview = [];
+            $monthMap = [];
+
+            foreach ($monthlySales as $sale) {
+                $m = (int)$sale->month_num;
+                $monthMap[$m] = $sale->total;
+            }
+            foreach ($months as $idx => $monthName) {
+                $salesOverview[] = [
+                    'month' => $monthName,
+                    'revenue' => (float) ($monthMap[$idx + 1] ?? 0),
+                ];
+            }
+
+            // ==================== BUILD STOCK MOVEMENT CHART DATA ====================
+            $stockInMap = [];
+            $stockOutMap = [];
+            foreach ($monthlyStock as $stock) {
+                $m = (int)$stock->month_num;
+                if ($stock->type === 'PURCHASE') {
+                    $stockInMap[$m] = (float) $stock->total_quantity;
+                } elseif ($stock->type === 'SALE') {
+                    $stockOutMap[$m] = (float) $stock->total_quantity;
+                }
+            }
+            $stockMovement = [];
+            foreach ($months as $idx => $monthName) {
+                $stockMovement[] = [
+                    'month' => $monthName,
+                    'stock_in' => $stockInMap[$idx + 1] ?? 0,
+                    'stock_out' => $stockOutMap[$idx + 1] ?? 0,
+                ];
+            }
+
+            // ==================== BUILD CUSTOMER GROWTH CHART DATA ====================
+            $customerGrowth = [];
+            $customerMap = [];
+
+            foreach ($monthlyCustomers as $c) {
+                $m = (int)$c->month_num;
+                $customerMap[$m] = (int) $c->total;
+            }
+            foreach ($months as $idx => $monthName) {
+                $customerGrowth[] = [
+                    'month' => $monthName,
+                    'new_customers' => $customerMap[$idx + 1] ?? 0,
+                ];
+            }
+
+            // ==================== PRODUCT DISTRIBUTION (by category - pie chart data) ====================
+            $categoryDistribution = DB::table('products')
+                ->join('categories', 'products.category_id', '=', 'categories.id')
+                ->select('categories.name', DB::raw('COUNT(products.id) as count'))
+                ->groupBy('categories.name')
+                ->get()
+                ->map(function ($row) {
+                    return [
+                        'category' => $row->name,
+                        'count' => (int) $row->count,
+                    ];
+                })
+                ->toArray();
 
             // ==================== ASSEMBLE RESPONSE ====================
             $data = [
@@ -241,6 +334,11 @@ class DashboardController extends Controller
                 ],
                 'recent_sales' => $recentSales,
                 'top_products' => $topProducts,
+                // Chart data
+                'sales_overview'       => $salesOverview,
+                'stock_movement'       => $stockMovement,
+                'customer_growth'      => $customerGrowth,
+                'category_distribution'=> $categoryDistribution,
             ];
 
             Cache::put($cacheKey, $data, $cacheTTL);

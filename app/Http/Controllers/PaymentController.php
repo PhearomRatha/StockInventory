@@ -13,15 +13,12 @@ use Illuminate\Support\Facades\DB;
 class PaymentController extends Controller
 {
     /**
-     * FIXED: added select() and with() for better performance
      * Get all payments
      */
     public function index()
     {
         try {
-            // OPTIMIZED: Add pagination to prevent returning too many records
-            $payments = Payment::select('id', 'reference_type', 'reference_id', 'amount', 'payment_type', 'payment_method', 'paid_to_from', 'payment_date', 'status', 'recorded_by')
-                ->with(['recordedBy:id,name'])
+            $payments = Payment::with(['recordedBy:id,name', 'sale:id,invoice_number'])
                 ->latest()
                 ->limit(100)
                 ->get();
@@ -39,18 +36,30 @@ class PaymentController extends Controller
     {
         try {
             $validated = $request->validate([
-                'sale_id' => 'required|exists:sales,id',
+                'reference_type' => 'required|in:sale,purchase',
+                'reference_id' => 'required|exists:sales,id',
+                'payment_type' => 'required|in:income,expense',
                 'amount' => 'required|numeric|min:0',
                 'payment_method' => 'required|string',
-                'reference' => 'nullable|string',
+                'paid_to_from' => 'nullable|string',
+                'payment_date' => 'required|date',
+                'status' => 'required|in:paid,pending',
                 'notes' => 'nullable|string'
             ]);
 
-            $payment = Payment::create($validated);
+            $payment = Payment::create([
+                'sale_id' => $validated['reference_type'] === 'sale' ? $validated['reference_id'] : null,
+                'type' => strtoupper($validated['payment_type']),
+                'amount' => $validated['amount'],
+                'payment_method' => $validated['payment_method'],
+                'paid_to_from' => $validated['paid_to_from'] ?? null,
+                'payment_date' => $validated['payment_date'],
+                'status' => $validated['status'],
+                'notes' => $validated['notes'] ?? null,
+                'recorded_by' => $request->user()?->id ?? 1,
+            ]);
+            
             ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
-
-            // Clear payment cache
-            Cache::forget('payment_dashboard');
 
             return ResponseHelper::success('Payment created successfully', $payment, 201);
         } catch (\Exception $e) {
@@ -67,9 +76,26 @@ class PaymentController extends Controller
             $payment = Payment::findOrFail($id);
 
             $validated = $request->validate([
-                'status' => 'sometimes|required|string',
+                'reference_type' => 'sometimes|required|in:sale,purchase',
+                'reference_id' => 'sometimes|required|exists:sales,id',
+                'payment_type' => 'sometimes|required|in:income,expense',
+                'amount' => 'sometimes|required|numeric|min:0',
+                'payment_method' => 'sometimes|required|string',
+                'paid_to_from' => 'nullable|string',
+                'payment_date' => 'sometimes|required|date',
+                'status' => 'sometimes|required|in:paid,pending',
                 'notes' => 'nullable|string'
             ]);
+
+            if (isset($validated['reference_type'])) {
+                $validated['sale_id'] = $validated['reference_type'] === 'sale' ? $validated['reference_id'] : null;
+                unset($validated['reference_type'], $validated['reference_id']);
+            }
+            
+            if (isset($validated['payment_type'])) {
+                $validated['type'] = strtoupper($validated['payment_type']);
+                unset($validated['payment_type']);
+            }
 
             $payment->update($validated);
             return ResponseHelper::success('Payment updated successfully', $payment);
@@ -98,24 +124,20 @@ class PaymentController extends Controller
     public function dashboard()
     {
         try {
-            // OPTIMIZED: Cache dashboard for 5 minutes
-            $data = Cache::remember('payment_dashboard', 300, function () {
-                // OPTIMIZED: Single query with aggregation
-                $paymentStats = Payment::selectRaw(
-                    "
-                    COUNT(*) as total_payments,
-                    COALESCE(SUM(amount), 0) as total_amount
-                    "
-                )->first();
+            $today = now()->toDateString();
+            
+            $income = Payment::where('type', 'INCOME')
+                ->whereDate('payment_date', $today)
+                ->sum('amount');
+                
+            $expense = Payment::where('type', 'EXPENSE')
+                ->whereDate('payment_date', $today)
+                ->sum('amount');
 
-                $recentPayments = Payment::latest()->take(10)->get();
-
-                return [
-                    'total_payments' => $paymentStats->total_payments,
-                    'total_amount' => $paymentStats->total_amount,
-                    'recent_payments' => $recentPayments
-                ];
-            });
+            $data = [
+                'today_income' => (float) $income,
+                'today_expense' => (float) $expense,
+            ];
 
             return ResponseHelper::success('Payment dashboard data retrieved successfully', $data);
         } catch (\Exception $e) {
@@ -137,18 +159,17 @@ class PaymentController extends Controller
                 'notes' => 'nullable|string'
             ]);
 
-            // Use DB transaction to ensure data consistency
             $payment = DB::transaction(function () use ($validated) {
                 $payment = Payment::create([
                     'sale_id' => $validated['sale_id'],
+                    'type' => 'INCOME',
                     'amount' => $validated['amount'],
                     'payment_method' => $validated['payment_method'],
-                    'reference' => $validated['reference'] ?? null,
+                    'reference_no' => $validated['reference'] ?? null,
                     'status' => 'completed',
                     'notes' => $validated['notes'] ?? null
                 ]);
 
-                // Update sale payment status
                 Sale::where('id', $validated['sale_id'])->update([
                     'payment_status' => 'paid',
                     'status' => 'completed'
@@ -158,9 +179,6 @@ class PaymentController extends Controller
 
                 return $payment;
             });
-
-            // Clear payment cache
-            Cache::forget('payment_dashboard');
 
             return ResponseHelper::success('Payment successful', $payment, 201);
         } catch (\Exception $e) {
@@ -179,20 +197,20 @@ class PaymentController extends Controller
                 'reference' => 'required|string'
             ]);
 
-            // Use DB transaction to ensure data consistency
             $payment = DB::transaction(function () use ($validated) {
                 $payment = Payment::findOrFail($validated['payment_id']);
                 $payment->update([
                     'status' => 'completed',
-                    'reference' => $validated['reference']
+                    'reference_no' => $validated['reference']
                 ]);
 
-                // Also update the related sale status
-                Sale::where('id', $payment->sale_id)->update([
-                    'payment_status' => 'paid',
-                    'status' => 'completed',
-                    'payment_reference' => $validated['reference']
-                ]);
+                if ($payment->sale_id) {
+                    Sale::where('id', $payment->sale_id)->update([
+                        'payment_status' => 'paid',
+                        'status' => 'completed',
+                        'payment_reference' => $validated['reference']
+                    ]);
+                }
 
                 return $payment;
             });

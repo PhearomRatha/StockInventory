@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
-// use Illuminate\Support\Facades\Gate;
+use App\Models\User;
+use App\Services\PermissionService;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -13,7 +15,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
-        //
+        // Policies are auto-discovered by Laravel (e.g. Product -> ProductPolicy)
     ];
 
     /**
@@ -21,6 +23,18 @@ class AuthServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Register policies explicitly if needed
+        $this->registerPolicies();
+
+        // Make $user->can('module.action') and Gate checks use our dynamic RBAC from DB
+        Gate::before(function (User $user, string $ability, array $arguments = []) {
+            // If our permission service grants it, allow
+            if (PermissionService::can($user, $ability)) {
+                return true;
+            }
+
+            // Return null to let other gates/policies decide (e.g. for model-specific)
+            return null;
+        });
     }
 }

@@ -18,6 +18,8 @@ class StoreCustomerRequest extends FormRequest
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string',
+            'type' => 'nullable|string',
+            'notes' => 'nullable|string',
         ];
     }
 }

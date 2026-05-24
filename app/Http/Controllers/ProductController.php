@@ -9,7 +9,6 @@ use App\Helpers\ResponseHelper;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Products as Product;
-use App\Models\Stock_ins;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -32,25 +31,26 @@ class ProductController extends Controller
     public function stock()
     {
         return CacheHelper::remember(CacheHelper::productsStockKey(), 10, function () {
-            $lowStock = Product::select('id', 'name', 'stock_quantity')
-                ->whereBetween('stock_quantity', [1, 9])
+            $lowStock = Product::withSum('warehouseProducts as total_qty', 'quantity')
+                ->having('total_qty', '>', 0)
+                ->having('total_qty', '<', 10)
                 ->limit(50)
                 ->get()
                 ->map(fn ($p) => [
                     'id' => $p->id,
                     'name' => $p->name,
-                    'stock_quantity' => $p->stock_quantity,
+                    'stock_quantity' => (float) ($p->total_qty ?? 0),
                     'status' => 'Low Stock',
                 ]);
 
-            $outOfStock = Product::select('id', 'name', 'stock_quantity')
-                ->where('stock_quantity', 0)
+            $outOfStock = Product::withSum('warehouseProducts as total_qty', 'quantity')
+                ->having('total_qty', '=', 0)
                 ->limit(50)
                 ->get()
                 ->map(fn ($p) => [
                     'id' => $p->id,
                     'name' => $p->name,
-                    'stock_quantity' => $p->stock_quantity,
+                    'stock_quantity' => 0,
                     'status' => 'Out of Stock',
                 ]);
 
@@ -72,6 +72,7 @@ class ProductController extends Controller
 
         return CacheHelper::remember($cacheKey, 30, function () use ($perPage) {
             $products = Product::with(['category:id,name', 'supplier:id,name'])
+                ->withSum('warehouseProducts as stock_quantity', 'quantity')
                 ->paginate($perPage);
 
             $products->getCollection()->transform(fn ($product) => [
@@ -85,9 +86,9 @@ class ProductController extends Controller
                 'cost' => $product->cost,
                 'reorder_level' => $product->reorder_level,
                 'description' => $product->description,
-                'stock_quantity' => $product->stock_quantity,
-                'status' => $product->stock_status,
-                'low_stock' => $product->is_low_stock,
+                'stock_quantity' => (float) ($product->stock_quantity ?? 0),
+                'status' => $this->getStockStatus((float) ($product->stock_quantity ?? 0), $product->reorder_level ?? 0),
+                'low_stock' => ($product->stock_quantity ?? 0) < ($product->reorder_level ?? 10),
                 'image' => ImageHelper::getImageUrl($product->image),
             ]);
 
@@ -103,10 +104,12 @@ class ProductController extends Controller
         $cacheKey = "product_show_{$id}";
 
         return CacheHelper::remember($cacheKey, 30, function () use ($id) {
-            $product = Product::with(['category:id,name', 'supplier:id,name,email,phone'])->findOrFail($id);
+            $product = Product::with(['category:id,name', 'supplier:id,name,email,phone'])
+                ->withSum('warehouseProducts as stock_quantity', 'quantity')
+                ->findOrFail($id);
 
-            $status = $product->stock_quantity == 0 ? 'Out of Stock' :
-                      ($product->stock_quantity <= $product->reorder_level ? 'Low Stock' : 'In Stock');
+            $stockQty = (float) ($product->stock_quantity ?? 0);
+            $status = $stockQty <= 0 ? 'Out of Stock' : ($stockQty <= ($product->reorder_level ?? 0) ? 'Low Stock' : 'In Stock');
 
             return ResponseHelper::success('Product retrieved successfully', [
                 'id' => $product->id,
@@ -119,7 +122,7 @@ class ProductController extends Controller
                 'cost' => $product->cost,
                 'reorder_level' => $product->reorder_level,
                 'description' => $product->description,
-                'stock_quantity' => $product->stock_quantity,
+                'stock_quantity' => $stockQty,
                 'status' => $status,
                 'image' => $product->image ? ImageHelper::getImageUrl($product->image) : null,
             ]);
@@ -149,21 +152,11 @@ class ProductController extends Controller
             ? ImageHelper::uploadToCloudinary($request->file('image'), 'products')
             : 'https://i.pinimg.com/736x/22/ae/3b/22ae3bb2f7b46bed0e3a99a025835ab0.jpg';
 
-        // Auto price & reorder_level
+        // Auto price & reorder_level (stock handled via purchases/adjustments after create)
         $validated['price'] ??= round($validated['cost'] * 1.2, 2);
-        $validated['reorder_level'] ??= ($validated['stock_quantity'] <= 20 ? 5 : ($validated['stock_quantity'] <= 50 ? 10 : round($validated['stock_quantity'] * 0.2)));
+        $validated['reorder_level'] ??= 5;
 
         $product = Product::create($validated);
-
-        // Initial stock entry
-        if ($validated['stock_quantity'] > 0) {
-            Stock_ins::create([
-                'product_id' => $product->id,
-                'quantity' => $validated['stock_quantity'],
-                'description' => 'Initial stock on product creation',
-                'added_by' => auth()->id() ?? null,
-            ]);
-        }
 
         ActivityLogHelper::logCreated('products', $product->id);
 
@@ -192,24 +185,12 @@ class ProductController extends Controller
             $validated['image'] = ImageHelper::uploadToCloudinary($request->file('image'), 'products');
         }
 
-        // Auto price & reorder_level
+        // Auto price & reorder_level (no stock on product)
         if (isset($validated['cost']) && ! isset($validated['price'])) {
             $validated['price'] = round($validated['cost'] * 1.2, 2);
         }
-        if (isset($validated['stock_quantity']) && ! isset($validated['reorder_level'])) {
-            $stock = $validated['stock_quantity'];
-            $validated['reorder_level'] = $stock <= 20 ? 5 : ($stock <= 50 ? 10 : round($stock * 0.2));
-
-            // Add stock_ins entry for increase
-            $diff = $stock - $product->stock_quantity;
-            if ($diff > 0) {
-                Stock_ins::create([
-                    'product_id' => $product->id,
-                    'quantity' => $diff,
-                    'description' => 'Stock adjusted on product update',
-                    'added_by' => auth()->id() ?? null,
-                ]);
-            }
+        if (! isset($validated['reorder_level']) && isset($validated['reorder_level']) === false) {
+            $validated['reorder_level'] = 5;
         }
 
         $product->update($validated);
@@ -245,5 +226,16 @@ class ProductController extends Controller
         CacheHelper::forget("product_show_{$id}");
 
         return ResponseHelper::success('Product and image deleted successfully');
+    }
+
+    private function getStockStatus(float $stock, int $reorderLevel = 0): string
+    {
+        if ($stock <= 0) {
+            return 'Out of Stock';
+        }
+        if ($reorderLevel > 0 && $stock <= $reorderLevel) {
+            return 'Low Stock';
+        }
+        return 'In Stock';
     }
 }

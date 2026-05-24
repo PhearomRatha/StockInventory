@@ -10,33 +10,52 @@ class Payments extends Model
     use HasFactory;
 
     protected $fillable = [
-        'reference_type',
-        'reference_id',
+        'sale_id',
+        'type',
         'amount',
-        'payment_type',
         'payment_method',
-        'paid_to_from',
+        'reference_no',
+        'notes',
         'payment_date',
-        'bill_number',
-        'recorded_by',
+        'paid_to_from',
         'status',
-        'md5'
+        'recorded_by',
     ];
-      public function reference() {
-        return $this->morphTo(); // can belong to Sale or StockIn
+
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'payment_date' => 'date',
+    ];
+
+    public function sale()
+    {
+        return $this->belongsTo(Sales::class, 'sale_id');
     }
 
-    public function recordedBy() {
+    public function recordedBy()
+    {
         return $this->belongsTo(User::class, 'recorded_by');
     }
-    public function sale() {
-    return $this->belongsTo(Sales::class, 'reference_id')->where('reference_type','sale');
-}
 
-public function stockIn() {
-    return $this->belongsTo(Stock_ins::class, 'reference_id')->where('reference_type','purchase');
-}
+    public function getPaymentTypeAttribute()
+    {
+        return $this->type;
+    }
 
+    public function setPaymentTypeAttribute($value)
+    {
+        $this->attributes['type'] = $value;
+    }
+
+    public function getReferenceTypeAttribute()
+    {
+        return $this->sale_id ? 'sale' : 'purchase';
+    }
+
+    public function getReferenceIdAttribute()
+    {
+        return $this->sale_id;
+    }
 }
 
 

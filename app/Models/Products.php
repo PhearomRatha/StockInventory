@@ -10,19 +10,18 @@ class Products extends Model
     use HasFactory;
     protected $table      = 'products'; // default is 'products'
     protected $primaryKey = 'id';
-    protected $fillable   = [
-        'name',
+    protected $fillable = [
         'category_id',
         'supplier_id',
+        'name',
         'sku',
         'barcode',
-        'description',
-        'price',
-        'cost',
-        'stock_quantity',
-        'reorder_level',
-        'is_low_stock',
         'image',
+        'description',
+        'cost',
+        'price',
+        'reorder_level',
+        'status',
     ];
 
     public function category()
@@ -35,42 +34,26 @@ class Products extends Model
         return $this->belongsTo(Suppliers::class);
     }
 
-    public function stockIns()
-    {
-        return $this->hasMany(Stock_ins::class);
-    }
-
-    public function stockOuts()
-    {
-        return $this->hasMany(Stock_outs::class);
-    }
-
     public function saleItems()
     {
-        return $this->hasMany(SaleItem::class);
+        return $this->hasMany(SaleItem::class, 'product_id');
     }
 
-    // Accessor for stock status
-    public function getStockStatusAttribute()
+    public function warehouseProducts()
     {
-        $currentStock = $this->stock_quantity;
-        $lowStockThreshold = 10;
-
-        if ($currentStock == 0) {
-            return 'Out-of-Stock';
-        } elseif ($currentStock >= $lowStockThreshold * 2) {
-            return 'In Stock';
-        } elseif ($currentStock >= $lowStockThreshold) {
-            return 'Low Stock';
-        } else {
-            return 'Very Low Stock';
-        }
+        return $this->hasMany(WarehouseProduct::class, 'product_id');
     }
 
-    // Accessor for low stock flag
-    public function getIsLowStockAttribute()
+    public function stockTransactions()
     {
-        $lowStockThreshold = 10;
-        return $this->stock_quantity < $lowStockThreshold;
+        return $this->hasMany(StockTransaction::class, 'product_id');
+    }
+
+    /**
+     * Total stock across all warehouses (computed)
+     */
+    public function getTotalStockAttribute(): float
+    {
+        return (float) $this->warehouseProducts()->sum('quantity');
     }
 }

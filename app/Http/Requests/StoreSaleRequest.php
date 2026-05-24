@@ -15,9 +15,10 @@ class StoreSaleRequest extends FormRequest
     {
         return [
             'customer_id' => 'nullable|exists:customers,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|numeric|min:0.01',
             'notes' => 'nullable|string',
         ];
     }

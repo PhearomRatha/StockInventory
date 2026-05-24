@@ -5,8 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Sales;
 use App\Models\Products;
-use App\Models\Stock_ins;
-use App\Models\Stock_outs;
+use App\Models\StockTransaction;
 use App\Models\Activity_logs;
 use App\Helpers\ResponseHelper;
 use Illuminate\Support\Facades\Cache;
@@ -22,10 +21,10 @@ class ReportController extends Controller
             $startDate = $request->start_date ?? now()->startOfMonth()->toDateString();
             $endDate = $request->end_date ?? now()->toDateString();
 
-            // OPTIMIZED: Use single query with aggregation instead of get() + sum()
-            $salesData = Sales::whereBetween('created_at', [$startDate, $endDate])
-                ->selectRaw('COUNT(*) as total_sales, COALESCE(SUM(total_amount), 0) as total_revenue')
-                ->first();
+             // OPTIMIZED: Use single query with aggregation instead of get() + sum()
+             $salesData = Sales::whereBetween('created_at', [$startDate, $endDate])
+                 ->selectRaw('COUNT(*) as total_sales, COALESCE(SUM(total), 0) as total_revenue')
+                 ->first();
 
             $sales = Sales::whereBetween('created_at', [$startDate, $endDate])
                 ->select('id', 'customer_id', 'sold_by', 'invoice_number', 'total_amount', 'payment_status', 'payment_method', 'status', 'created_at')
@@ -59,13 +58,13 @@ class ReportController extends Controller
             $data = Cache::remember($cacheKey, 300, function () use ($startDate, $endDate) {
                 // OPTIMIZED: Single query for sales revenue
                 $salesData = Sales::whereBetween('created_at', [$startDate, $endDate])
-                    ->selectRaw('COALESCE(SUM(total_amount), 0) as total_revenue')
+                    ->selectRaw('COALESCE(SUM(total), 0) as total_revenue')
                     ->first();
 
-                // OPTIMIZED: Use join to get product price in single query
-                $stockInCost = Stock_ins::whereBetween('stock_ins.created_at', [$startDate, $endDate])
-                    ->join('products', 'stock_ins.product_id', '=', 'products.id')
-                    ->selectRaw('COALESCE(SUM(stock_ins.quantity * products.cost), 0) as total_cost')
+                // OPTIMIZED: stock tx for purchase cost (new schema)
+                $stockInCost = StockTransaction::whereBetween('created_at', [$startDate, $endDate])
+                    ->where('type', 'PURCHASE')
+                    ->selectRaw('COALESCE(SUM(quantity * unit_cost), 0) as total_cost')
                     ->first();
 
                 return [
@@ -99,23 +98,39 @@ class ReportController extends Controller
                 // OPTIMIZED: Use database queries instead of loading all and filtering in PHP
                 $totalProducts = Products::count();
                 
-                // Get stock values using database aggregation
-                $stockValues = Products::selectRaw(
-                    'COALESCE(SUM(stock_quantity * price), 0) as total_value'
-                )->first();
+                // Get stock values using warehouse_products (new schema)
+                $stockValues = \DB::table('warehouse_products')
+                    ->join('products', 'warehouse_products.product_id', '=', 'products.id')
+                    ->selectRaw('COALESCE(SUM(warehouse_products.quantity * products.price), 0) as total_value')
+                    ->first();
 
-                // OPTIMIZED: Use WHERE clause at database level
-                $lowStockCount = Products::whereBetween('stock_quantity', [1, 9])->count();
-                $outOfStockCount = Products::where('stock_quantity', 0)->count();
+                // Low/out of stock based on total warehouse quantity
+                $lowStockCount = \DB::table('warehouse_products')
+                    ->select('product_id')
+                    ->groupBy('product_id')
+                    ->havingRaw('SUM(quantity) BETWEEN 1 AND 9')
+                    ->count();
 
-                // Get actual low stock and out of stock products (limited)
-                $lowStock = Products::whereBetween('stock_quantity', [1, 9])
-                    ->limit(50)
-                    ->get(['id', 'name', 'stock_quantity', 'price']);
-                    
-                $outOfStock = Products::where('stock_quantity', 0)
-                    ->limit(50)
-                    ->get(['id', 'name', 'stock_quantity', 'price']);
+                $outOfStockCount = \DB::table('warehouse_products')
+                    ->select('product_id')
+                    ->groupBy('product_id')
+                    ->havingRaw('SUM(quantity) = 0')
+                    ->count();
+
+                // Sample low/out products (filter after fetch to avoid invalid HAVING without GROUP BY)
+                $lowStock = Products::withSum('warehouseProducts as stock_quantity', 'quantity')
+                    ->limit(100)
+                    ->get(['id', 'name', 'price'])
+                    ->filter(fn($p) => ($p->stock_quantity ?? 0) > 0 && ($p->stock_quantity ?? 0) < 10)
+                    ->take(50)
+                    ->values();
+
+                $outOfStock = Products::withSum('warehouseProducts as stock_quantity', 'quantity')
+                    ->limit(100)
+                    ->get(['id', 'name', 'price'])
+                    ->filter(fn($p) => ($p->stock_quantity ?? 0) == 0)
+                    ->take(50)
+                    ->values();
 
                 return [
                     'total_products' => $totalProducts,

@@ -315,11 +315,20 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $user->load('role');
+        $user->load(['role.permissions']);
+
+        $permissions = $user->getAllPermissions();
+
+        $userData = $user->toArray();
+        // Ensure role is always a string (not the loaded relation object) for frontend consistency
+        $userData['role'] = $user->role->name ?? 'User';
 
         return response()->json([
             'success' => true,
-            'data' => $user,
+            'data' => [
+                ...$userData,
+                'permissions' => $permissions,
+            ],
         ]);
     }
 

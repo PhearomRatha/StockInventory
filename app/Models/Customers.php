@@ -9,13 +9,19 @@ class Customers extends Model
 {
     use HasFactory;
 
-    protected $table="customers";
-    protected $fillable =["notes","preferences","address","phone","email","name","type"];
-     public function stockOuts() {
-        return $this->hasMany(Stock_outs::class);
-    }
+    protected $table = 'customers';
 
-    public function sales() {
+    protected $fillable = [
+        'name',
+        'phone',
+        'email',
+        'address',
+        'type',
+        'notes',
+    ];
+
+    public function sales()
+    {
         return $this->hasMany(Sales::class);
     }
 }

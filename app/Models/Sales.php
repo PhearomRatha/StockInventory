@@ -2,43 +2,66 @@
 
 namespace App\Models;
 
-use Faker\Provider\ar_EG\Payment;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Sales extends Model
-
 {
     use HasFactory;
-protected $fillable = [
-    'customer_id',
-    'sold_by',
-    'invoice_number',
-    'total_amount',
-    'discount',
-    'payment_status',
-    'payment_method',
-    'status',
-    'md5'
-];
 
-    public function stockOuts() {
-        return $this->hasMany(Stock_outs::class);
-    }
+    protected $fillable = [
+        'customer_id',
+        'warehouse_id',
+        'invoice_number',
+        'subtotal',
+        'discount',
+        'tax',
+        'total',
+        'payment_status',
+        'payment_method',
+        'notes',
+        'sold_by',
+        'sold_at',
+    ];
 
-    public function customer() {
+    protected $casts = [
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'tax' => 'decimal:2',
+        'total' => 'decimal:2',
+        'sold_at' => 'datetime',
+    ];
+
+    public function customer()
+    {
         return $this->belongsTo(Customers::class);
     }
 
-    public function soldBy() {
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function soldBy()
+    {
         return $this->belongsTo(User::class, 'sold_by');
     }
 
-    public function payments() {
-        return $this->morphMany(Payment::class, 'reference');
+    public function payments()
+    {
+        return $this->hasMany(Payments::class, 'sale_id');
     }
 
-    public function saleItems() {
+    public function saleItems()
+    {
         return $this->hasMany(SaleItem::class, 'sale_id');
+    }
+
+    /**
+     * Scope for payment status
+     */
+    public function scopeUnpaid($query)
+    {
+        return $query->where('payment_status', 'UNPAID');
     }
 }

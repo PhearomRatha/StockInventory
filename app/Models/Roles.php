@@ -18,11 +18,7 @@ class Roles extends Model
 
     protected $fillable = [
         'name',
-        'permissions'
-    ];
-
-    protected $casts = [
-        'permissions' => 'array',
+        'description',
     ];
 
     /**
@@ -30,6 +26,15 @@ class Roles extends Model
      */
     public function users() {
         return $this->hasMany(User::class);
+    }
+
+    /**
+     * Permissions via role_permissions pivot (RBAC)
+     */
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'role_permissions', 'role_id', 'permission_id')
+            ->withTimestamps();
     }
 
     /**
