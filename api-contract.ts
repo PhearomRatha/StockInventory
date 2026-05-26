@@ -92,16 +92,17 @@
 // ============================================================================
 
 export interface ApiContracts {
-  // Auth Endpoints
-  login: AuthLoginContract;
-  register: RegisterContract;
-  googleLogin: GoogleLoginContract;
-  logout: LogoutContract;
-  me: MeContract;
-  changePassword: ChangePasswordContract;
-  refreshToken: RefreshTokenContract;
-  
-  // Products
+// Auth Endpoints
+   login: AuthLoginContract;
+   dashboardIndex: DashboardIndexContract;
+   register: RegisterContract;
+   googleLogin: GoogleLoginContract;
+   logout: LogoutContract;
+   me: MeContract;
+   changePassword: ChangePasswordContract;
+   refreshToken: RefreshTokenContract;
+   
+   // Products
   productsIndex: ProductsIndexContract;
   productsShow: ProductsShowContract;
   productsStore: ProductsStoreContract;
@@ -157,38 +158,40 @@ export interface ApiContracts {
 // ============================================================================
 
 interface AuthLoginContract {
-  endpoint: "/api/auth/login";
-  method: "POST";
-  authRequired: false;
-  request: {
-    email: string;
-    password: string;
-  };
-  validation: {
-    email: "required|email";
-    password: "required|string";
-  };
-  successResponse: {
-    success: true;
-    data: {
-      user: {
-        id: number;
-        name: string;
-        email: string;
-        role: string;
-        role_id: number;
-        status: string;
-      };
-      token: string;
-      token_type: "Bearer";
-    };
-  };
-  errorResponse: {
-    success: false;
-    message: string;
-    errors?: Record<string, string[]>;
-  };
-}
+   endpoint: "/api/auth/login";
+   method: "POST";
+   authRequired: false;
+   request: {
+     email: string;
+     password: string;
+   };
+   validation: {
+     email: "required|email";
+     password: "required|string";
+   };
+   successResponse: {
+     success: true;
+     data: {
+       user: {
+         id: number;
+         name: string;
+         email: string;
+         role: string;
+         role_id: number;
+         status: string;
+         permissions: string[];
+       };
+       token: string;
+       token_type: "Bearer";
+       expires_at: string;
+     };
+   };
+   errorResponse: {
+     success: false;
+     message: string;
+     errors?: Record<string, string[]>;
+   };
+ }
 
 interface RegisterContract {
   endpoint: "/api/register";
@@ -256,13 +259,48 @@ interface ChangePasswordContract {
 }
 
 interface RefreshTokenContract {
-  endpoint: "/api/auth/refresh";
-  method: "POST";
-  authRequired: true;
-}
+   endpoint: "/api/auth/refresh";
+   method: "POST";
+   authRequired: true;
+ }
 
-// ============================================================================
-// PRODUCTS CONTRACTS
+ // ============================================================================
+ // DASHBOARD CONTRACTS
+ // ============================================================================
+
+ interface DashboardIndexContract {
+   endpoint: "/api/dashboard/index";
+   method: "GET";
+   authRequired: true;
+   roles: ["Admin", "Manager", "Staff"];
+   successResponse: {
+     success: true;
+     message: string;
+     data: {
+       stock_report: {
+         total_products: number;
+         total_stock_value: number;
+         low_stock_count: number;
+         out_of_stock_count: number;
+         low_stock_products: Array<{
+           id: number;
+           name: string;
+           price: number;
+           stock_quantity: number;
+         }>;
+         out_of_stock_products: Array<{
+           id: number;
+           name: string;
+           price: number;
+           stock_quantity: number;
+         }>;
+       };
+     };
+   };
+ }
+
+ // ============================================================================
+ // PRODUCTS CONTRACTS
 // ============================================================================
 
 interface ProductsIndexContract {

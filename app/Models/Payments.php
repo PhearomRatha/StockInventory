@@ -4,22 +4,24 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Payments extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'sale_id',
-        'type',
+        'reference_type',
+        'reference_id',
         'amount',
+        'payment_type',
         'payment_method',
-        'reference_no',
-        'notes',
-        'payment_date',
         'paid_to_from',
-        'status',
+        'payment_date',
         'recorded_by',
+        'bill_number',
+        'status',
+        'md5',
     ];
 
     protected $casts = [
@@ -27,34 +29,14 @@ class Payments extends Model
         'payment_date' => 'date',
     ];
 
-    public function sale()
+    public function reference(): MorphTo
     {
-        return $this->belongsTo(Sales::class, 'sale_id');
+        return $this->morphTo();
     }
 
     public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by');
-    }
-
-    public function getPaymentTypeAttribute()
-    {
-        return $this->type;
-    }
-
-    public function setPaymentTypeAttribute($value)
-    {
-        $this->attributes['type'] = $value;
-    }
-
-    public function getReferenceTypeAttribute()
-    {
-        return $this->sale_id ? 'sale' : 'purchase';
-    }
-
-    public function getReferenceIdAttribute()
-    {
-        return $this->sale_id;
     }
 }
 

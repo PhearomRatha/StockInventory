@@ -83,8 +83,8 @@ class TokenService
             ];
         }
 
-        // Find user with role
-        $user = User::with('role')->where('email', $email)->first();
+        // Find user with role and permissions
+        $user = User::with(['role.permissions'])->where('email', $email)->first();
 
         if (!$user) {
             $this->incrementLoginAttempts($email);
@@ -117,7 +117,8 @@ class TokenService
         // Check if user is active
         if ($user->status !== User::STATUS_ACTIVE) {
             $statusMessages = [
-                'INACTIVE' => 'Your account has been deactivated. Please contact administrator.',
+                User::STATUS_PENDING => 'Your account is pending approval. Please wait for administrator verification.',
+                User::STATUS_INACTIVE => 'Your account has been deactivated. Please contact administrator.',
             ];
 
             return [
@@ -156,6 +157,7 @@ class TokenService
                     'role_id' => $user->role_id,
                     'status' => $user->status,
                     'has_password' => !empty($user->password),
+                    'permissions' => $user->getAllPermissions(),
                 ],
                 'token' => $token->plainTextToken,
                 'token_type' => 'Bearer',

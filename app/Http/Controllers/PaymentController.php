@@ -3,221 +3,339 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Payments as Payment;
 use App\Models\Sales as Sale;
-use App\Helpers\ResponseHelper;
-use App\Helpers\ActivityLogHelper;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use App\Models\StockTransaction;
+use App\Models\Activity_logs as ActivityLog;
+use KHQR\BakongKHQR;
+use KHQR\Helpers\KHQRData;
+use KHQR\Models\IndividualInfo;
 
 class PaymentController extends Controller
 {
-    /**
-     * Get all payments
-     */
+    // -----------------------------
+    // List all payments
+    // -----------------------------
     public function index()
     {
-        try {
-            $payments = Payment::with(['recordedBy:id,name', 'sale:id,invoice_number'])
-                ->latest()
-                ->limit(100)
-                ->get();
-            
-            return ResponseHelper::success('Payments retrieved successfully', $payments);
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
+        $payments = Payment::with('reference')->get();
+        return response()->json([
+            'status' => 200,
+            'message'=> 'Payments retrieved successfully',
+            'data'   => $payments
+        ], 200);
     }
 
-    /**
-     * Create a new payment
-     */
+    // -----------------------------
+    // Dashboard: totals and history
+    // -----------------------------
+    public function dashboard()
+    {
+        return Cache::remember('payments_dashboard', 10, function () {
+            $today = now()->toDateString();
+
+            // Today's income
+            $totalIncome = Payment::where('payment_type', 'income')
+                ->whereDate('payment_date', $today)
+                ->sum('amount');
+
+            // Today's expense
+            $totalExpense = Payment::where('payment_type', 'expense')
+                ->whereDate('payment_date', $today)
+                ->sum('amount');
+
+            // Recent payments (last 10)
+            $recentPayments = Payment::with('reference')
+                ->orderByDesc('payment_date')
+                ->take(10)
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'today_income' => $totalIncome,
+                'today_expense'=> $totalExpense,
+                'recent_payments' => $recentPayments
+            ]);
+        });
+    }
+
+    // -----------------------------
+    // Checkout payment via Bakong (like multi-item/multi-sale)
+    // -----------------------------
+    public function checkoutPayment(Request $request)
+    {
+        $request->validate([
+            'reference_type'=>'required|in:sale,purchase',
+            'reference_ids'=>'required|array',
+            'reference_ids.*'=>'required|integer',
+            'payment_method'=>'nullable|in:Bakong,Cash'
+        ]);
+
+        $bakongAccount = env('BAKONG_ACCOUNT');
+        $bakongToken   = env('MY_BAKONG_TOKEN');
+
+        if (!$bakongAccount || !$bakongToken) {
+            return response()->json([
+                'status'=>false,
+                'message'=>'Bakong configuration missing'
+            ],500);
+        }
+
+        $paymentMethod = $request->payment_method ?? 'Bakong';
+        $payments = [];
+        $totalAmount = 0;
+
+        foreach($request->reference_ids as $id){
+            $reference = $request->reference_type=='sale' ? Sale::find($id) : StockTransaction::find($id);
+            if(!$reference) continue;
+
+            $amount = $reference->total_cost ?? $reference->total ?? $reference->amount ?? 0;
+
+            $payment = Payment::create([
+                'reference_type'=>$request->reference_type,
+                'reference_id'=>$id,
+                'amount'=>$amount,
+                'payment_type'=>$request->reference_type=='sale'?'income':'expense',
+                'payment_method'=>$paymentMethod,
+                'paid_to_from'=>$paymentMethod === 'Bakong' ? $bakongAccount : 'Cash',
+                'payment_date'=>now(),
+                'status'=>$paymentMethod === 'Cash' ? 'paid' : 'pending'
+            ]);
+
+            $payments[] = $payment;
+            $totalAmount += $payment->amount;
+        }
+
+        if(empty($payments)){
+            return response()->json([
+                'status'=>false,
+                'message'=>'No valid references to pay'
+            ],400);
+        }
+
+        if($paymentMethod === 'Cash'){
+            foreach($payments as $payment){
+                ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'created',
+                    'module' => 'payments',
+                    'record_id' => $payment->id
+                ]);
+            }
+            return response()->json([
+                'status'=>true,
+                'payments'=>$payments,
+                'total_amount'=>$totalAmount,
+                'payment_method'=>'Cash',
+                'message'=>'Payments completed via Cash'
+            ]);
+        }
+
+        // Combine bill numbers if multiple payments
+        $billNumbers = collect($payments)->pluck('bill_number')->implode(',');
+
+        // Generate QR
+        $individualInfo = new IndividualInfo(
+            bakongAccountID: $bakongAccount,
+            merchantName: "RA THA Phearom",
+            merchantCity: "Phnom Penh",
+            currency: KHQRData::CURRENCY_KHR,
+            amount: $totalAmount,
+            billNumber: $billNumbers
+        );
+
+        $qrResponse = (new BakongKHQR($bakongToken))->generateIndividual($individualInfo);
+
+        foreach($payments as $i => $payment){
+            $payment->update(['md5' => $qrResponse->data['md5'] ?? null]);
+            $payment->refresh();
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'created',
+                'module' => 'payments',
+                'record_id' => $payment->id
+            ]);
+        }
+
+        return response()->json([
+            'status'=>true,
+            'payments'=>$payments,
+            'total_amount'=>$totalAmount,
+            'qr_string'=>$qrResponse->data['qr'] ?? null,
+            'md5'=>$qrResponse->data['md5'] ?? null,
+            'payment_method'=>'Bakong'
+        ]);
+    }
+
+    // -----------------------------
+    // Verify Bakong payment and update records
+    // -----------------------------
+    public function verifyPayment(Request $request)
+    {
+        $request->validate(['md5'=>'required|string']);
+
+        $bakongToken = env('MY_BAKONG_TOKEN');
+        if(!$bakongToken){
+            return response()->json([
+                'status'=>false,
+                'message'=>'Bakong configuration missing'
+            ],500);
+        }
+
+        $khqr = new BakongKHQR($bakongToken);
+        $verify = $khqr->checkTransactionByMD5($request->md5);
+        $verifyArray = is_array($verify)?$verify:(array)$verify;
+        $data = $verifyArray['data'] ?? [];
+
+        if(($verifyArray['responseCode'] ?? 1) !==0 || empty($data['acknowledgedDateMs'])){
+            return response()->json([
+                'status'=>false,
+                'message'=>'Payment not found or unsuccessful',
+                'bakong'=>$verifyArray
+            ],400);
+        }
+
+        // Update payment record
+        $payment = Payment::where('md5',$request->md5)->first();
+        if($payment && $payment->status!='paid'){
+            $payment->update([
+                'status'=>'paid',
+                'bill_number'=>$data['externalRef'] ?? $payment->bill_number
+            ]);
+
+            // If sale, update sale status too
+            if($payment->reference_type=='sale'){
+                $sale = Sale::find($payment->reference_id);
+                if($sale) $sale->update(['status'=>'paid']);
+            }
+
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'verified',
+                'module' => 'payments',
+                'record_id' => $payment->id
+            ]);
+        }
+
+        return response()->json([
+            'status'=>true,
+            'message'=>'Payment verified successfully',
+            'payment'=>$payment,
+            'bakong'=>$data
+        ]);
+    }
+
+    // -----------------------------
+    // Store new payment
+    // -----------------------------
     public function store(Request $request)
     {
         try {
             $validated = $request->validate([
-                'reference_type' => 'required|in:sale,purchase',
-                'reference_id' => 'required|exists:sales,id',
-                'payment_type' => 'required|in:income,expense',
-                'amount' => 'required|numeric|min:0',
-                'payment_method' => 'required|string',
-                'paid_to_from' => 'nullable|string',
-                'payment_date' => 'required|date',
-                'status' => 'required|in:paid,pending',
-                'notes' => 'nullable|string'
+                'reference_type'=>'required|in:sale,purchase',
+                'reference_id'=>'required|integer',
+                'amount'=>'required|numeric',
+                'payment_type'=>'required|in:income,expense',
+                'payment_method'=>'nullable|string',
+                'paid_to_from'=>'required|string',
+                'payment_date'=>'required|date',
+                'recorded_by'=>'required|exists:users,id'
             ]);
 
-            $payment = Payment::create([
-                'sale_id' => $validated['reference_type'] === 'sale' ? $validated['reference_id'] : null,
-                'type' => strtoupper($validated['payment_type']),
-                'amount' => $validated['amount'],
-                'payment_method' => $validated['payment_method'],
-                'paid_to_from' => $validated['paid_to_from'] ?? null,
-                'payment_date' => $validated['payment_date'],
-                'status' => $validated['status'],
-                'notes' => $validated['notes'] ?? null,
-                'recorded_by' => $request->user()?->id ?? 1,
-            ]);
-            
-            ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
+            // Check reference exists
+            if($validated['reference_type']=='sale' && !Sale::find($validated['reference_id'])){
+                return response()->json(['status'=>404,'message'=>'Sale not found'],404);
+            }
+            if($validated['reference_type']=='purchase' && !StockTransaction::find($validated['reference_id'])){
+                return response()->json(['status'=>404,'message'=>'Stock transaction not found'],404);
+            }
 
-            return ResponseHelper::success('Payment created successfully', $payment, 201);
+            $payment = Payment::create($validated);
+
+            // Log activity
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'created',
+                'module' => 'payments',
+                'record_id' => $payment->id
+            ]);
+
+            return response()->json([
+                'status'=>201,
+                'message'=>'Payment recorded successfully',
+                'data'=>$payment
+            ],201);
+
         } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
+            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
 
-    /**
-     * Update a payment
-     */
+    // -----------------------------
+    // Update payment
+    // -----------------------------
     public function update(Request $request, $id)
     {
         try {
             $payment = Payment::findOrFail($id);
 
             $validated = $request->validate([
-                'reference_type' => 'sometimes|required|in:sale,purchase',
-                'reference_id' => 'sometimes|required|exists:sales,id',
-                'payment_type' => 'sometimes|required|in:income,expense',
-                'amount' => 'sometimes|required|numeric|min:0',
-                'payment_method' => 'sometimes|required|string',
-                'paid_to_from' => 'nullable|string',
-                'payment_date' => 'sometimes|required|date',
-                'status' => 'sometimes|required|in:paid,pending',
-                'notes' => 'nullable|string'
+                'reference_type'=>'sometimes|required|in:sale,purchase',
+                'reference_id'=>'sometimes|required|integer',
+                'amount'=>'sometimes|required|numeric',
+                'payment_type'=>'sometimes|required|in:income,expense',
+                'payment_method'=>'nullable|string',
+                'paid_to_from'=>'sometimes|required|string',
+                'payment_date'=>'sometimes|required|date',
+                'recorded_by'=>'sometimes|required|exists:users,id'
             ]);
 
-            if (isset($validated['reference_type'])) {
-                $validated['sale_id'] = $validated['reference_type'] === 'sale' ? $validated['reference_id'] : null;
-                unset($validated['reference_type'], $validated['reference_id']);
-            }
-            
-            if (isset($validated['payment_type'])) {
-                $validated['type'] = strtoupper($validated['payment_type']);
-                unset($validated['payment_type']);
-            }
-
             $payment->update($validated);
-            return ResponseHelper::success('Payment updated successfully', $payment);
+
+            // Log activity
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'updated',
+                'module' => 'payments',
+                'record_id' => $payment->id
+            ]);
+
+            return response()->json([
+                'status'=>200,
+                'message'=>'Payment updated successfully',
+                'data'=>$payment
+            ],200);
+
         } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
+            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
 
-    /**
-     * Delete a payment
-     */
+    // -----------------------------
+    // Delete payment
+    // -----------------------------
     public function destroy($id)
     {
         try {
             $payment = Payment::findOrFail($id);
             $payment->delete();
-            return ResponseHelper::success('Payment deleted successfully');
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
-    }
 
-    /**
-     * Get payments dashboard
-     */
-    public function dashboard()
-    {
-        try {
-            $today = now()->toDateString();
-            
-            $income = Payment::where('type', 'INCOME')
-                ->whereDate('payment_date', $today)
-                ->sum('amount');
-                
-            $expense = Payment::where('type', 'EXPENSE')
-                ->whereDate('payment_date', $today)
-                ->sum('amount');
-
-            $data = [
-                'today_income' => (float) $income,
-                'today_expense' => (float) $expense,
-            ];
-
-            return ResponseHelper::success('Payment dashboard data retrieved successfully', $data);
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
-    }
-
-    /**
-     * Checkout payment
-     */
-    public function checkoutPayment(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'sale_id' => 'required|exists:sales,id',
-                'amount' => 'required|numeric|min:0',
-                'payment_method' => 'required|string',
-                'reference' => 'nullable|string',
-                'notes' => 'nullable|string'
+            // Log activity
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'deleted',
+                'module' => 'payments',
+                'record_id' => $id
             ]);
 
-            $payment = DB::transaction(function () use ($validated) {
-                $payment = Payment::create([
-                    'sale_id' => $validated['sale_id'],
-                    'type' => 'INCOME',
-                    'amount' => $validated['amount'],
-                    'payment_method' => $validated['payment_method'],
-                    'reference_no' => $validated['reference'] ?? null,
-                    'status' => 'completed',
-                    'notes' => $validated['notes'] ?? null
-                ]);
+            return response()->json([
+                'status'=>200,
+                'message'=>'Payment deleted successfully'
+            ],200);
 
-                Sale::where('id', $validated['sale_id'])->update([
-                    'payment_status' => 'paid',
-                    'status' => 'completed'
-                ]);
-
-                ActivityLogHelper::log('payment', "Payment #{$payment->id}: {$validated['amount']} via {$validated['payment_method']}");
-
-                return $payment;
-            });
-
-            return ResponseHelper::success('Payment successful', $payment, 201);
         } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
-        }
-    }
-
-    /**
-     * Verify payment
-     */
-    public function verifyPayment(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'payment_id' => 'required|exists:payments,id',
-                'reference' => 'required|string'
-            ]);
-
-            $payment = DB::transaction(function () use ($validated) {
-                $payment = Payment::findOrFail($validated['payment_id']);
-                $payment->update([
-                    'status' => 'completed',
-                    'reference_no' => $validated['reference']
-                ]);
-
-                if ($payment->sale_id) {
-                    Sale::where('id', $payment->sale_id)->update([
-                        'payment_status' => 'paid',
-                        'status' => 'completed',
-                        'payment_reference' => $validated['reference']
-                    ]);
-                }
-
-                return $payment;
-            });
-
-            return ResponseHelper::success('Payment verified successfully', $payment);
-        } catch (\Exception $e) {
-            return ResponseHelper::error($e->getMessage());
+            return response()->json(['status'=>500,'message'=>$e->getMessage()],500);
         }
     }
 }

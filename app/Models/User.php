@@ -34,11 +34,11 @@ class User extends Authenticatable
 
     public const ROLE_STAFF = 'Staff';
 
-    /**
-     * Status constants
-     */
+/**
+      * Status constants
+      */
+    public const STATUS_PENDING = 'PENDING';
     public const STATUS_ACTIVE = 'ACTIVE';
-
     public const STATUS_INACTIVE = 'INACTIVE';
 
     /**

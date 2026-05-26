@@ -23,7 +23,7 @@ class DefaultAdminSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'password' => Hash::make('password123'),
-                'status' => true,
+                'status' => User::STATUS_ACTIVE,
                 'role_id' => $adminRole->id
             ]
         );

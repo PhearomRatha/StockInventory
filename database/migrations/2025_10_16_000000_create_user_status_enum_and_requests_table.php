@@ -13,21 +13,32 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Drop existing ENUM type if it exists (for fresh migrations)
-        DB::statement("DROP TYPE IF EXISTS user_status CASCADE");
+        // For SQLite compatibility, use enum column directly without creating custom type
+        if (DB::getDriverName() !== 'pgsql') {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('status');
+            });
 
-        // Create ENUM type for user status
-        DB::statement("CREATE TYPE user_status AS ENUM ('PENDING', 'INACTIVE', 'ACTIVE')");
+            Schema::table('users', function (Blueprint $table) {
+                $table->enum('status', ['PENDING', 'INACTIVE', 'ACTIVE'])->default('PENDING')->after('password');
+            });
+        } else {
+            // PostgreSQL: Drop existing ENUM type if it exists (for fresh migrations)
+            DB::statement("DROP TYPE IF EXISTS user_status CASCADE");
 
-        // Update users table to use ENUM type
-        Schema::table('users', function (Blueprint $table) {
-            // Drop the existing status column and recreate with ENUM
-            $table->dropColumn('status');
-        });
+            // Create ENUM type for user status
+            DB::statement("CREATE TYPE user_status AS ENUM ('PENDING', 'INACTIVE', 'ACTIVE')");
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->enum('status', ['PENDING', 'INACTIVE', 'ACTIVE'])->default('PENDING')->after('password');
-        });
+            // Update users table to use ENUM type
+            Schema::table('users', function (Blueprint $table) {
+                // Drop the existing status column and recreate with ENUM
+                $table->dropColumn('status');
+            });
+
+            Schema::table('users', function (Blueprint $table) {
+                $table->enum('status', ['PENDING', 'INACTIVE', 'ACTIVE'])->default('PENDING')->after('password');
+            });
+        }
 
         // Create user_requests table for pending registrations
         Schema::create('user_requests', function (Blueprint $table) {
@@ -66,16 +77,22 @@ return new class extends Migration
         Schema::dropIfExists('token_revocation');
         Schema::dropIfExists('user_requests');
 
-        // Revert users table to boolean status
+        // For SQLite compatibility, just drop the column
         Schema::table('users', function (Blueprint $table) {
             $table->dropColumn('status');
         });
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->boolean('status')->default(true);
-        });
+        if (DB::getDriverName() === 'pgsql') {
+            Schema::table('users', function (Blueprint $table) {
+                $table->boolean('status')->default(true);
+            });
 
-        // Drop the ENUM type
-        DB::statement("DROP TYPE IF EXISTS user_status CASCADE");
+            // Drop the ENUM type
+            DB::statement("DROP TYPE IF EXISTS user_status CASCADE");
+        } else {
+            Schema::table('users', function (Blueprint $table) {
+                $table->boolean('status')->default(true);
+            });
+        }
     }
 };

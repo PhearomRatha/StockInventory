@@ -15,7 +15,7 @@ class SuppliersController extends Controller
             $perPage = $request->query('per_page', 15);
 
             // OPTIMIZED: Add pagination and select columns
-            $suppliers = Supplier::select('id', 'name', 'contact', 'email', 'phone', 'address')
+            $suppliers = Supplier::select('id', 'name', 'email', 'phone', 'address')
                 ->paginate(min($perPage, 100));
 
             return ResponseHelper::success('Suppliers retrieved successfully', $suppliers);

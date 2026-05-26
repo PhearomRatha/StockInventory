@@ -167,13 +167,19 @@ class SalesController extends Controller
         try {
             $search = $request->query('search');
 
-            // Use warehouse_products sum for current stock (new schema)
-            $products = Product::select('products.id', 'products.name', 'products.price')
-                ->withSum('warehouseProducts as stock_quantity', 'quantity')
+            // SQLite doesn't support HAVING with withSum subqueries
+            // Use a subquery join instead
+            $subQuery = DB::table('warehouse_products')
+                ->select('product_id', DB::raw('SUM(quantity) as stock_quantity'))
+                ->groupBy('product_id')
+                ->havingRaw('SUM(quantity) > 0');
+
+            $products = Product::select('products.id', 'products.name', 'products.price', 'wq.stock_quantity')
+                ->leftJoinSub($subQuery, 'wq', 'wq.product_id', '=', 'products.id')
                 ->when($search, function ($query) use ($search) {
                     $query->where('products.name', 'like', "%{$search}%");
                 })
-                ->having('stock_quantity', '>', 0)
+                ->orderBy('products.name')
                 ->paginate(20);
 
             return ResponseHelper::success('Products retrieved', $products);

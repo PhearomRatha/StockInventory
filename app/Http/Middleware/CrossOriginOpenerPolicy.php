@@ -26,9 +26,6 @@ class CrossOriginOpenerPolicy
         // Setting to null/empty allows the page to be embedded in cross-origin contexts
         $response->headers->set('Cross-Origin-Embedder-Policy', 'unsafe-none');
         
-        // Allow cross-origin resource sharing for API calls
-        $response->headers->set('Access-Control-Allow-Origin', '*');
-        
         return $response;
     }
 }

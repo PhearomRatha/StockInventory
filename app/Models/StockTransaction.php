@@ -56,4 +56,9 @@ class StockTransaction extends Model
     {
         return $this->morphTo(__FUNCTION__, 'related_type', 'related_id');
     }
+
+    public function payments()
+    {
+        return $this->morphMany(Payments::class, 'reference');
+    }
 }

@@ -49,7 +49,7 @@ class Sales extends Model
 
     public function payments()
     {
-        return $this->hasMany(Payments::class, 'sale_id');
+        return $this->morphMany(Payments::class, 'reference');
     }
 
     public function saleItems()

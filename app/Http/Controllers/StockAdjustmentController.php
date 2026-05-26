@@ -83,7 +83,7 @@ class StockAdjustmentController extends Controller
         $this->authorize('viewAny', StockAdjustment::class);
 
         try {
-            $suppliers = \App\Models\Suppliers::select('id', 'name', 'contact', 'email', 'phone', 'address')
+            $suppliers = \App\Models\Suppliers::select('id', 'name', 'email', 'phone', 'address')
                 ->get();
             $products = \App\Models\Products::select('id', 'name', 'sku', 'barcode', 'price', 'cost', 'reorder_level')
                 ->get();

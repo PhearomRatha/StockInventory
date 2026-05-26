@@ -54,11 +54,14 @@ return new class extends Migration
 
     private function dropColumnsIfExist(string $table, array $columns): void
     {
-        foreach ($columns as $column) {
-            if (Schema::hasColumn($table, $column)) {
-                Schema::table($table, function (Blueprint $table) use ($column) {
-                    $table->dropColumn($column);
-                });
+        // SQLite has issues dropping columns with indexes, skip for SQLite
+        if (DB::getDriverName() === 'pgsql') {
+            foreach ($columns as $column) {
+                if (Schema::hasColumn($table, $column)) {
+                    Schema::table($table, function (Blueprint $table) use ($column) {
+                        $table->dropColumn($column);
+                    });
+                }
             }
         }
     }
@@ -66,6 +69,22 @@ return new class extends Migration
     private function alignUsers(): void
     {
         if (!Schema::hasTable('users')) {
+            return;
+        }
+
+        // SQLite: Skip column drops that would conflict with existing indexes
+        if (DB::getDriverName() !== 'pgsql') {
+            // For SQLite, just ensure the correct columns exist
+            if (!Schema::hasColumn('users', 'status')) {
+                Schema::table('users', function (Blueprint $table) {
+                    $table->enum('status', ['ACTIVE', 'INACTIVE'])->default('ACTIVE')->after('password');
+                });
+            }
+            if (!Schema::hasColumn('users', 'last_login_at')) {
+                Schema::table('users', function (Blueprint $table) {
+                    $table->timestamp('last_login_at')->nullable()->after('status');
+                });
+            }
             return;
         }
 
@@ -136,6 +155,16 @@ return new class extends Migration
     private function alignPermissions(): void
     {
         if (!Schema::hasTable('permissions')) {
+            return;
+        }
+
+        // SQLite: skip column changes without doctrine/dbal
+        if (DB::getDriverName() !== 'pgsql') {
+            if (!Schema::hasColumn('permissions', 'description')) {
+                Schema::table('permissions', function (Blueprint $table) {
+                    $table->text('description')->nullable()->after('name');
+                });
+            }
             return;
         }
 
@@ -226,9 +255,12 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('warehouses', 'created_by')) {
-            Schema::table('warehouses', function (Blueprint $table) {
-                $table->unsignedBigInteger('created_by')->nullable(false)->change();
-            });
+            // SQLite: skip column change without doctrine/dbal
+            if (DB::getDriverName() === 'pgsql') {
+                Schema::table('warehouses', function (Blueprint $table) {
+                    $table->unsignedBigInteger('created_by')->nullable(false)->change();
+                });
+            }
         }
     }
 
@@ -239,6 +271,16 @@ return new class extends Migration
         }
 
         $this->dropColumnsIfExist('products', ['stock_quantity', 'is_low_stock']);
+
+        // SQLite: skip column changes without doctrine/dbal
+        if (DB::getDriverName() !== 'pgsql') {
+            if (!Schema::hasColumn('products', 'status')) {
+                Schema::table('products', function (Blueprint $table) {
+                    $table->boolean('status')->default(true)->after('reorder_level');
+                });
+            }
+            return;
+        }
 
         Schema::table('products', function (Blueprint $table) {
             if (Schema::hasColumn('products', 'supplier_id')) {
@@ -358,16 +400,24 @@ return new class extends Migration
         });
 
         if (Schema::hasColumn('sales', 'total_amount') && !Schema::hasColumn('sales', 'total')) {
-            Schema::table('sales', function (Blueprint $table) {
-                $table->renameColumn('total_amount', 'total');
-            });
+            if (DB::getDriverName() !== 'pgsql') {
+                // SQLite doesn't support renameColumn easily
+                // Skip for now
+            } else {
+                Schema::table('sales', function (Blueprint $table) {
+                    $table->renameColumn('total_amount', 'total');
+                });
+            }
         }
 
-        foreach (['subtotal', 'discount', 'tax', 'total'] as $column) {
-            if (Schema::hasColumn('sales', $column)) {
-                Schema::table('sales', function (Blueprint $table) use ($column) {
-                    $table->decimal($column, 15, 2)->change();
-                });
+        // SQLite: skip column changes without doctrine/dbal
+        if (DB::getDriverName() === 'pgsql') {
+            foreach (['subtotal', 'discount', 'tax', 'total'] as $column) {
+                if (Schema::hasColumn('sales', $column)) {
+                    Schema::table('sales', function (Blueprint $table) use ($column) {
+                        $table->decimal($column, 15, 2)->change();
+                    });
+                }
             }
         }
 
@@ -390,9 +440,13 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('sales', 'subtotal')) {
-            DB::table('sales')->where('subtotal', 0)->update([
-                'subtotal' => DB::raw('COALESCE(total, 0)'),
-            ]);
+            // SQLite: use total_amount if total doesn't exist
+            $totalColumn = Schema::hasColumn('sales', 'total') ? 'total' : 'total_amount';
+            if (Schema::hasColumn('sales', $totalColumn)) {
+                DB::table('sales')->where('subtotal', 0)->update([
+                    'subtotal' => DB::raw("COALESCE({$totalColumn}, 0)"),
+                ]);
+            }
         }
 
         $this->dropColumnsIfExist('sales', ['md5', 'status']);
@@ -401,6 +455,11 @@ return new class extends Migration
     private function alignSaleItems(): void
     {
         if (!Schema::hasTable('sale_items')) {
+            return;
+        }
+
+        // SQLite: skip column changes without doctrine/dbal
+        if (DB::getDriverName() !== 'pgsql') {
             return;
         }
 
@@ -451,9 +510,12 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('payments', 'amount')) {
-            Schema::table('payments', function (Blueprint $table) {
-                $table->decimal('amount', 15, 2)->change();
-            });
+            // SQLite: skip column change without doctrine/dbal
+            if (DB::getDriverName() === 'pgsql') {
+                Schema::table('payments', function (Blueprint $table) {
+                    $table->decimal('amount', 15, 2)->change();
+                });
+            }
         }
 
         if (
@@ -515,36 +577,39 @@ return new class extends Migration
             return;
         }
 
-        if (Schema::hasColumn('stock_transactions', 'reference') && !Schema::hasColumn('stock_transactions', 'reference_no')) {
-            Schema::table('stock_transactions', function (Blueprint $table) {
-                $table->renameColumn('reference', 'reference_no');
-            });
-        }
+        // SQLite: skip complex column changes without doctrine/dbal
+        if (DB::getDriverName() === 'pgsql') {
+            if (Schema::hasColumn('stock_transactions', 'reference') && !Schema::hasColumn('stock_transactions', 'reference_no')) {
+                Schema::table('stock_transactions', function (Blueprint $table) {
+                    $table->renameColumn('reference', 'reference_no');
+                });
+            }
 
-        if (Schema::hasColumn('stock_transactions', 'type')) {
-            DB::table('stock_transactions')->where('type', 'IN')->update(['type' => 'PURCHASE']);
-            DB::table('stock_transactions')->where('type', 'OUT')->update(['type' => 'SALE']);
-            DB::table('stock_transactions')->where('type', 'TRANSFER')->update(['type' => 'TRANSFER_IN']);
+            if (Schema::hasColumn('stock_transactions', 'type')) {
+                DB::table('stock_transactions')->where('type', 'IN')->update(['type' => 'PURCHASE']);
+                DB::table('stock_transactions')->where('type', 'OUT')->update(['type' => 'SALE']);
+                DB::table('stock_transactions')->where('type', 'TRANSFER')->update(['type' => 'TRANSFER_IN']);
 
-            Schema::table('stock_transactions', function (Blueprint $table) {
-                $table->dropColumn('type');
-            });
+                Schema::table('stock_transactions', function (Blueprint $table) {
+                    $table->dropColumn('type');
+                });
 
-            Schema::table('stock_transactions', function (Blueprint $table) {
-                $table->enum('type', [
-                    'PURCHASE',
-                    'SALE',
-                    'ADJUSTMENT',
-                    'TRANSFER_IN',
-                    'TRANSFER_OUT',
-                ])->after('product_id');
-            });
-        }
+                Schema::table('stock_transactions', function (Blueprint $table) {
+                    $table->enum('type', [
+                        'PURCHASE',
+                        'SALE',
+                        'ADJUSTMENT',
+                        'TRANSFER_IN',
+                        'TRANSFER_OUT',
+                    ])->after('product_id');
+                });
+            }
 
-        if (Schema::hasColumn('stock_transactions', 'quantity')) {
-            Schema::table('stock_transactions', function (Blueprint $table) {
-                $table->decimal('quantity', 15, 2)->change();
-            });
+            if (Schema::hasColumn('stock_transactions', 'quantity')) {
+                Schema::table('stock_transactions', function (Blueprint $table) {
+                    $table->decimal('quantity', 15, 2)->change();
+                });
+            }
         }
     }
 

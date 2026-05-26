@@ -21,7 +21,7 @@ return new class extends Migration
         // Legacy auth/token tables not in final schema (Sanctum still needs personal_access_tokens)
         Schema::dropIfExists('otp_codes');
         Schema::dropIfExists('refresh_tokens');
-        Schema::dropIfExists('token_revocations');
+        // Note: token_revocations is still in use by TokenService, do not drop
 
         // Old password reset (final uses password_reset_tokens which exists)
         // Note: we keep personal_access_tokens for Sanctum, failed_jobs for queue if used

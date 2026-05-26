@@ -12,6 +12,8 @@ use App\Models\Suppliers;
 use App\Models\User;
 use App\Models\WarehouseProduct;
 use App\Helpers\ResponseHelper;
+use App\Models\Warehouse;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -161,27 +163,27 @@ class DashboardController extends Controller
 
             // ==================== SALES OVERVIEW CHART (line chart data) ====================
             $monthlySales = Sales::query()
-                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, SUM(total) as total")
+                ->selectRaw("TO_CHAR(MIN(created_at), 'Mon') as month, EXTRACT(MONTH FROM MIN(created_at)) as month_num, SUM(total) as total")
                 ->where('created_at', '>=', now()->subMonths(11))
-                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon')")
-                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->orderByRaw("MIN(created_at)")
                 ->get();
 
             // ==================== STOCK IN vs STOCK OUT CHART (bar chart data) ====================
             $monthlyStock = StockTransaction::query()
-                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, type, SUM(quantity) as total_quantity")
+                ->selectRaw("TO_CHAR(MIN(created_at), 'Mon') as month, EXTRACT(MONTH FROM MIN(created_at)) as month_num, type, SUM(quantity) as total_quantity")
                 ->whereIn('type', ['PURCHASE', 'SALE'])
                 ->where('created_at', '>=', now()->subMonths(11))
-                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon'), type")
-                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), type")
+                ->orderByRaw("MIN(created_at)")
                 ->get();
 
             // ==================== CUSTOMER GROWTH CHART (line chart data) ====================
             $monthlyCustomers = Customers::query()
-                ->selectRaw("TO_CHAR(created_at, 'Mon') as month, TO_CHAR(created_at, 'MM') as month_num, COUNT(*) as total")
+                ->selectRaw("TO_CHAR(MIN(created_at), 'Mon') as month, EXTRACT(MONTH FROM MIN(created_at)) as month_num, COUNT(*) as total")
                 ->where('created_at', '>=', now()->subMonths(11))
-                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM'), TO_CHAR(created_at, 'Mon')")
-                ->orderByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->groupByRaw("TO_CHAR(created_at, 'YYYY-MM')")
+                ->orderByRaw("MIN(created_at)")
                 ->get();
 
             // ==================== RECENT SALES & TOP PRODUCTS ====================
@@ -270,6 +272,58 @@ class DashboardController extends Controller
                 })
                 ->toArray();
 
+            // ==================== STOCK REPORT DATA ====================
+            $user = Auth::user();
+            $warehouseId = $user ? $user->warehouse_id : null;
+
+            $stockValues = DB::table('warehouse_products')
+                ->join('products', 'warehouse_products.product_id', '=', 'products.id')
+                ->when($warehouseId, function ($query) use ($warehouseId) {
+                    return $query->where('warehouse_products.warehouse_id', $warehouseId);
+                })
+                ->selectRaw('COALESCE(SUM(warehouse_products.quantity * products.price), 0) as total_value')
+                ->first();
+
+            $lowStock = Products::withSum(['warehouseProducts as stock_quantity' => function ($query) use ($warehouseId) {
+                    if ($warehouseId) {
+                        $query->where('warehouse_id', $warehouseId);
+                    }
+                }], 'quantity')
+                ->limit(100)
+                ->get(['id', 'name', 'price'])
+                ->filter(fn($p) => ($p->stock_quantity ?? 0) > 0 && ($p->stock_quantity ?? 0) < 10)
+                ->take(50)
+                ->values();
+
+            $outOfStock = Products::withSum(['warehouseProducts as stock_quantity' => function ($query) use ($warehouseId) {
+                    if ($warehouseId) {
+                        $query->where('warehouse_id', $warehouseId);
+                    }
+                }], 'quantity')
+                ->limit(100)
+                ->get(['id', 'name', 'price'])
+                ->filter(fn($p) => ($p->stock_quantity ?? 0) == 0)
+                ->take(50)
+                ->values();
+
+            $lowStockProducts = $lowStock->map(function ($p) {
+                return [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'price' => $p->price,
+                    'stock_quantity' => $p->stock_quantity,
+                ];
+            })->toArray();
+
+            $outOfStockProducts = $outOfStock->map(function ($p) {
+                return [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'price' => $p->price,
+                    'stock_quantity' => $p->stock_quantity,
+                ];
+            })->toArray();
+
             // ==================== ASSEMBLE RESPONSE ====================
             $data = [
                 'overview' => [
@@ -339,6 +393,15 @@ class DashboardController extends Controller
                 'stock_movement'       => $stockMovement,
                 'customer_growth'      => $customerGrowth,
                 'category_distribution'=> $categoryDistribution,
+                // Stock report data
+                'stock_report' => [
+                    'total_products' => $overviewCounts->total_products,
+                    'total_stock_value' => (float) $stockValues->total_value,
+                    'low_stock_count' => $overviewCounts->low_stock_count,
+                    'out_of_stock_count' => $overviewCounts->out_of_stock_count,
+                    'low_stock_products' => $lowStockProducts,
+                    'out_of_stock_products' => $outOfStockProducts,
+                ],
             ];
 
             Cache::put($cacheKey, $data, $cacheTTL);

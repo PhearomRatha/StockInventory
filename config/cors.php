@@ -1,28 +1,21 @@
 <?php
 
 return [
-
-
-
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    // 'allowed_origins' => ['https://stockinventoryfront.onrender.com'],
-  
-    'allowed_origins' => ['https://stock-inventory-front.vercel.app','http://localhost:5173'],
+    'paths' => [
+        'api/*',
+        'sanctum/csrf-cookie'
+    ],
 
     'allowed_methods' => ['*'],
 
-
-
-    'allowed_origins_patterns' => [],
+    'allowed_origins' => [
+        'http://localhost:5173',
+        'https://stock-inventory-front.vercel.app'
+    ],
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => ['Authorization', 'Content-Type', 'X-Requested-With'],
-
-    'same_site' => 'none',
-    //set to false when deploy
+    'exposed_headers' => ['*'],
 
     'supports_credentials' => true,
-
-
 ];

@@ -100,6 +100,8 @@ class AuthController extends Controller
                 ]);
             }
 
+$user->load(['role.permissions']);
+
             // Create Sanctum token
             $token = $user->createToken('auth-token');
 
@@ -113,6 +115,8 @@ class AuthController extends Controller
                         'role' => $user->role->name ?? 'User',
                         'role_id' => $user->role_id,
                         'status' => $user->status,
+                        'has_password' => $user->hasPassword(),
+                        'permissions' => $user->getAllPermissions(),
                     ],
                     'token' => $token->plainTextToken,
                     'token_type' => 'Bearer',
@@ -180,7 +184,7 @@ class AuthController extends Controller
             $googleUser = Socialite::driver('google')->stateless()->user();
 
             // Find user by Google ID or email
-            $user = User::where('google_id', $googleUser->getId())
+            $user = User::with(['role.permissions'])->where('google_id', $googleUser->getId())
                 ->orWhere('email', $googleUser->getEmail())
                 ->first();
 
@@ -209,7 +213,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Google login successful',
+                'message' => 'Google callback successful',
                 'data' => [
                     'user' => [
                         'id' => $user->id,
@@ -219,6 +223,7 @@ class AuthController extends Controller
                         'role_id' => $user->role_id,
                         'status' => $user->status,
                         'has_password' => $user->hasPassword(),
+                        'permissions' => $user->getAllPermissions(),
                     ],
                     'token' => $token->plainTextToken,
                     'token_type' => 'Bearer',
