@@ -18,6 +18,7 @@ class ProductController extends Controller
      */
     public function totalPro()
     {
+        $this->authorize('viewAny', Product::class);
         return CacheHelper::remember(CacheHelper::productsTotalKey(), 60, function () {
             return ResponseHelper::success('Total products retrieved successfully', [
                 'total_products' => Product::count(),
@@ -30,6 +31,7 @@ class ProductController extends Controller
      */
     public function stock()
     {
+        $this->authorize('viewAny', Product::class);
         return CacheHelper::remember(CacheHelper::productsStockKey(), 10, function () {
             $lowStock = Product::withSum('warehouseProducts as total_qty', 'quantity')
                 ->having('total_qty', '>', 0)
@@ -134,6 +136,7 @@ class ProductController extends Controller
      */
     public function store(StoreProductRequest $request)
     {
+        $this->authorize('create', Product::class);
         $validated = $request->validated();
 
         // Generate SKU
@@ -176,6 +179,7 @@ class ProductController extends Controller
         $validated = $request->validated();
 
         $product = Product::findOrFail($id);
+        $this->authorize('update', $product);
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -211,6 +215,7 @@ class ProductController extends Controller
     public function destroy($id)
     {
         $product = Product::findOrFail($id);
+        $this->authorize('delete', $product);
 
         if (! empty($product->image)) {
             ImageHelper::deleteFromCloudinary($product->image, 'products');

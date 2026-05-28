@@ -11,6 +11,8 @@ class SuppliersController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Supplier::class);
+
         try {
             $perPage = $request->query('per_page', 15);
 
@@ -26,6 +28,8 @@ class SuppliersController extends Controller
 
     public function store(StoreSupplierRequest $request)
     {
+        $this->authorize('create', Supplier::class);
+
         try {
             $validated = $request->validated();
 
@@ -41,6 +45,7 @@ class SuppliersController extends Controller
     {
         try {
             $supplier = Supplier::findOrFail($id);
+            $this->authorize('update', $supplier);
             $validated = $request->validated();
 
             $supplier->update($validated);
@@ -55,6 +60,7 @@ class SuppliersController extends Controller
     {
         try {
             $supplier = Supplier::findOrFail($id);
+            $this->authorize('delete', $supplier);
             $supplier->delete();
 
             return ResponseHelper::success('Supplier deleted successfully');

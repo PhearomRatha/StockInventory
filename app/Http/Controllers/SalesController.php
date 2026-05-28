@@ -15,6 +15,7 @@ class SalesController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Sale::class);
         try {
             $perPage = min((int) $request->query('per_page', 15), 100);
 
@@ -29,6 +30,7 @@ class SalesController extends Controller
 
     public function show($id)
     {
+        $this->authorize('view', Sale::class);
         try {
             return ResponseHelper::success(
                 'Sale details retrieved successfully',
@@ -41,6 +43,7 @@ class SalesController extends Controller
 
     public function store(StoreSaleRequest $request)
     {
+        $this->authorize('create', Sale::class);
         try {
             $sale = $this->saleService->create(
                 $request->validated(),
@@ -55,6 +58,7 @@ class SalesController extends Controller
 
     public function checkoutSale(StoreSaleRequest $request)
     {
+        $this->authorize('create', Sale::class);
         try {
             $sale = $this->saleService->create(
                 $request->validated(),
@@ -75,6 +79,7 @@ class SalesController extends Controller
 
     public function searchProducts(Request $request)
     {
+        $this->authorize('viewAny', Product::class);
         try {
             $perPage = min((int) $request->query('per_page', 20), 100);
 
@@ -89,6 +94,7 @@ class SalesController extends Controller
 
     public function searchCustomers(Request $request)
     {
+        $this->authorize('viewAny', Customer::class);
         try {
             $perPage = min((int) $request->query('per_page', 20), 100);
 
