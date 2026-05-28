@@ -65,17 +65,17 @@ class User extends Authenticatable
         return $this->hasMany(Payments::class, 'recorded_by');
     }
 
-    /**
-     * Activity logs relationship
-     */
+/**
+      * Activity logs relationship
+      */
     public function activityLogs()
     {
         return $this->hasMany(Activity_logs::class);
     }
 
     /**
-     * Check if user is Admin
-     */
+      * Check if user is Admin
+      */
     public function isAdmin(): bool
     {
         return $this->role && $this->role->name === self::ROLE_ADMIN;

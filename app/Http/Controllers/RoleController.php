@@ -13,6 +13,7 @@ class RoleController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Role::class);
         try {
             $perPage = $request->query('per_page', 15);
             
@@ -31,6 +32,7 @@ class RoleController extends Controller
      */
     public function store(Request $request)
     {
+        $this->authorize('create', Role::class);
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255|unique:roles',
@@ -51,6 +53,7 @@ class RoleController extends Controller
     {
         try {
             $role = Role::findOrFail($id);
+            $this->authorize('update', $role);
 
             $validated = $request->validate([
                 'name' => 'sometimes|required|string|max:255|unique:roles,name,' . $id,

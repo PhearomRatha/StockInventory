@@ -9,9 +9,7 @@ use Illuminate\Http\Request;
 
 class StockOutsController extends Controller
 {
-    public function __construct(protected InventoryService $inventoryService)
-    {
-    }
+    public function __construct(protected InventoryService $inventoryService) {}
 
     public function index(Request $request)
     {
@@ -46,6 +44,7 @@ class StockOutsController extends Controller
                 'creator:id,name,email',
             ])->where('type', StockTransaction::TYPE_SALE)->findOrFail($id);
 
+            $this->authorize('view', $transaction);
             return ResponseHelper::success('Stock out retrieved successfully', $transaction);
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
@@ -54,6 +53,7 @@ class StockOutsController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', StockTransaction::class);
         try {
             $validated = $request->validate([
                 'warehouse_id' => 'required|exists:warehouses,id',
@@ -81,6 +81,8 @@ class StockOutsController extends Controller
 
     public function dashboard()
     {
+        $this->authorize('viewAny', StockTransaction::class);
+
         try {
             $products = \App\Models\Products::select('id', 'name', 'sku', 'price')
                 ->withSum('warehouseProducts as total_qty', 'quantity')

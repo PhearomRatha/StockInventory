@@ -20,6 +20,7 @@ class SalesController extends Controller
 
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Sale::class);
         try {
             $perPage = min($request->query('per_page', 15), 100);
 
@@ -55,6 +56,7 @@ class SalesController extends Controller
 
     public function show($id)
     {
+        $this->authorize('view', Sale::class);
         try {
             $sale = Sale::with([
                 'customer:id,name,email',
@@ -72,6 +74,7 @@ class SalesController extends Controller
 
     public function store(StoreSaleRequest $request)
     {
+        $this->authorize('create', Sale::class);
         try {
             $user = $request->user();
             $validated = $request->validated();
@@ -153,6 +156,7 @@ class SalesController extends Controller
 
     public function checkout(Request $request)
     {
+        $this->authorize('create', Sale::class);
         try {
             $request->merge(['status' => 'completed', 'payment_status' => 'paid']);
 
@@ -164,6 +168,7 @@ class SalesController extends Controller
 
     public function searchProducts(Request $request)
     {
+        $this->authorize('viewAny', Product::class);
         try {
             $search = $request->query('search');
 
@@ -190,6 +195,7 @@ class SalesController extends Controller
 
     public function searchCustomers(Request $request)
     {
+        $this->authorize('viewAny', Customer::class);
         try {
             $search = $request->query('search');
 
@@ -200,6 +206,61 @@ class SalesController extends Controller
                 ->paginate(20);
 
             return ResponseHelper::success('Customers retrieved', $customers);
+        } catch (\Exception $e) {
+            return ResponseHelper::error($e->getMessage());
+        }
+    }
+
+    public function getDashboard()
+    {
+        $this->authorize('viewAny', Sale::class);
+        try {
+            $today = now()->toDateString();
+            $monthStart = now()->startOfMonth();
+
+            $sales = Sale::selectRaw('COUNT(*) as count, SUM(total) as total')
+                ->where('sold_at', '>=', $monthStart)
+                ->first();
+
+            return ResponseHelper::success('Sales dashboard retrieved', [
+                'month_sales' => $sales->count ?? 0,
+                'month_revenue' => (float) ($sales->total ?? 0),
+                'today_sales' => Sale::whereDate('sold_at', $today)->count(),
+            ]);
+        } catch (\Exception $e) {
+            return ResponseHelper::error($e->getMessage());
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            $sale = Sale::findOrFail($id);
+            $this->authorize('update', $sale);
+
+            $validated = $request->validate([
+                'customer_id' => 'sometimes|nullable|exists:customers,id',
+                'notes' => 'nullable|string',
+                'payment_status' => 'sometimes|in:UNPAID,PAID,REFUNDED',
+            ]);
+
+            $sale->update($validated);
+
+            return ResponseHelper::success('Sale updated successfully', $sale);
+        } catch (\Exception $e) {
+            return ResponseHelper::error($e->getMessage());
+        }
+    }
+
+    public function destroy($id)
+    {
+        try {
+            $sale = Sale::findOrFail($id);
+            $this->authorize('delete', $sale);
+
+            $sale->delete();
+
+            return ResponseHelper::success('Sale deleted successfully');
         } catch (\Exception $e) {
             return ResponseHelper::error($e->getMessage());
         }

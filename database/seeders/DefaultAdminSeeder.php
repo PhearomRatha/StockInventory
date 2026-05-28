@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Roles;
+use App\Models\Permission;
 use Illuminate\Support\Facades\Hash;
 
 class DefaultAdminSeeder extends Seeder
@@ -14,8 +15,25 @@ class DefaultAdminSeeder extends Seeder
         // Create default role
         $adminRole = Roles::firstOrCreate(
             ['name' => 'Admin'],
-            ['permissions' => json_encode(['all'])]
+            ['description' => 'Administrator with full access']
         );
+
+        // Ensure all permissions exist
+        if (Permission::count() === 0) {
+            foreach (Permission::MODULES as $module) {
+                foreach (Permission::ACTIONS as $action) {
+                    Permission::create([
+                        'module' => $module,
+                        'action' => $action,
+                        'description' => "{$module}.{$action}",
+                    ]);
+                }
+            }
+        }
+
+        // Sync all permissions to admin role
+        $allPermissionIds = Permission::pluck('id')->all();
+        $adminRole->permissions()->sync($allPermissionIds);
 
         // Create default admin user
         $adminUser = User::firstOrCreate(
@@ -29,7 +47,7 @@ class DefaultAdminSeeder extends Seeder
         );
 
         // Show debug info
-        dump($adminRole->toArray());
-        dump($adminUser->toArray());
+        dump($adminRole->load('permissions')->toArray());
+        dump($adminUser->load('role.permissions')->toArray());
     }
 }

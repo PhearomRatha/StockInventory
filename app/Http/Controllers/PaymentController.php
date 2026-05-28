@@ -19,6 +19,8 @@ class PaymentController extends Controller
     // -----------------------------
     public function index()
     {
+        $this->authorize('viewAny', Payment::class);
+
         $payments = Payment::with('reference')->get();
         return response()->json([
             'status' => 200,
@@ -32,6 +34,8 @@ class PaymentController extends Controller
     // -----------------------------
     public function dashboard()
     {
+        $this->authorize('viewAny', Payment::class);
+
         return Cache::remember('payments_dashboard', 10, function () {
             $today = now()->toDateString();
 
@@ -231,6 +235,8 @@ class PaymentController extends Controller
     // -----------------------------
     public function store(Request $request)
     {
+        $this->authorize('create', Payment::class);
+
         try {
             $validated = $request->validate([
                 'reference_type'=>'required|in:sale,purchase',
@@ -279,6 +285,7 @@ class PaymentController extends Controller
     {
         try {
             $payment = Payment::findOrFail($id);
+            $this->authorize('update', $payment);
 
             $validated = $request->validate([
                 'reference_type'=>'sometimes|required|in:sale,purchase',
@@ -293,7 +300,6 @@ class PaymentController extends Controller
 
             $payment->update($validated);
 
-            // Log activity
             ActivityLog::create([
                 'user_id' => auth()->id(),
                 'action' => 'updated',
@@ -319,6 +325,7 @@ class PaymentController extends Controller
     {
         try {
             $payment = Payment::findOrFail($id);
+            $this->authorize('delete', $payment);
             $payment->delete();
 
             // Log activity
