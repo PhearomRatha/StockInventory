@@ -6,6 +6,7 @@ use App\Http\Controllers\SuppliersController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\StockAdjustmentController;
 use App\Http\Controllers\StockTransactionController;
+use App\Http\Controllers\StockOutsController;
 use App\Http\Controllers\ActivityLogsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerController;
@@ -105,12 +106,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 
-    // Products (Staff can view)
-    Route::middleware('role:Staff')->controller(ProductController::class)->prefix('products')->group(function () {
+    // Products (Admin, Manager, Staff can view)
+    Route::middleware('role:Admin,Manager,Staff')->controller(ProductController::class)->prefix('products')->group(function () {
         Route::get('/', 'index');
-        Route::get('/{id}', 'show');
         Route::get('/total', 'totalPro');
         Route::get('/stock-status', 'stock');
+        Route::get('/{id}', 'show')->whereNumber('id');
     });
 
     // Products (Admin, Manager full access)
@@ -171,32 +172,31 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Stock Ins
     Route::middleware('role:Admin,Manager,Staff')->controller(StockAdjustmentController::class)->prefix('stock-ins')->group(function () {
         Route::get('/', 'index');
-        Route::get('/{id}', 'show');
         Route::get('/overview', 'overview');
+        Route::get('/{id}', 'show')->whereNumber('id');
         Route::post('/', 'store');
     });
 
     // Stock Outs
-    Route::middleware('role:Admin,Manager,Staff')->controller(StockAdjustmentController::class)->prefix('stock-outs')->group(function () {
+    Route::middleware('role:Admin,Manager,Staff')->controller(StockOutsController::class)->prefix('stock-outs')->group(function () {
         Route::get('/', 'index');
-        Route::get('/{id}', 'show');
         Route::get('/stock-out-dashboard', 'dashboard');
+        Route::get('/{id}', 'show')->whereNumber('id');
         Route::post('/', 'store');
-        Route::post('/{id}/receipt', 'receipt');
+        Route::post('/{id}/receipt', 'receipt')->whereNumber('id');
     });
 
     // Sales (Admin, Manager, Staff)
     Route::middleware('role:Admin,Manager,Staff')->controller(SalesController::class)->prefix('sales')->group(function () {
         Route::get('/', 'index');
         Route::post('/', 'store');
-        Route::patch('/{id}', 'update');
-        Route::delete('/{id}', 'destroy');
         Route::get('/dashboard', 'dashboard');
         Route::post('/checkout', 'checkoutSale');
         Route::get('/data', 'getSalesData');
         Route::get('/verify-payment', 'verifyPayment'); // placeholder
         Route::get('/products', 'searchProducts');
         Route::get('/customers', 'searchCustomers');
+        Route::get('/{id}', 'show')->whereNumber('id');
     });
 
     // Payments (Admin, Manager, Staff)
