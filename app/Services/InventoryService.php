@@ -416,40 +416,27 @@ class InventoryService
     ): StockTransaction {
         $userId = $userId ?: auth()->id();
         $warehouseId = $this->resolveWarehouseId($warehouseId);
+        $lastTransactionId = null;
 
-        return DB::transaction(function () use ($warehouseId, $items, $reason, $notes, $userId) {
+        DB::transaction(function () use ($warehouseId, $items, $reason, $notes, $userId, &$lastTransactionId) {
             foreach ($items as $item) {
                 $productId = (int) $item['product_id'];
                 $quantity = (float) $item['quantity'];
-
-                if (!$this->hasSufficientStock($productId, $quantity, $warehouseId)) {
-                    $product = Products::find($productId);
-                    throw new \Exception("Insufficient stock for {$product?->name}");
-                }
-
-                $product = Products::find($productId);
-                $unitCost = $product->cost ?? 0;
-
-                StockTransaction::create([
-                    'reference_no' => $this->generateReferenceNo(StockTransaction::TYPE_SALE),
-                    'warehouse_id' => $warehouseId,
-                    'product_id' => $productId,
-                    'type' => StockTransaction::TYPE_SALE,
-                    'quantity' => $quantity,
-                    'unit_cost' => $unitCost,
-                    'total_cost' => $unitCost * $quantity,
-                    'notes' => $notes ?? $reason,
-                    'created_by' => $userId,
-                ]);
 
                 $this->decreaseStock(
                     $productId,
                     $quantity,
                     $warehouseId,
                     StockTransaction::TYPE_SALE,
-                    $reason,
+                    $notes ?? $reason,
                     $userId
                 );
+
+                $lastTransactionId = StockTransaction::where('warehouse_id', $warehouseId)
+                    ->where('product_id', $productId)
+                    ->where('type', StockTransaction::TYPE_SALE)
+                    ->latest('id')
+                    ->value('id');
             }
 
             ActivityLogHelper::log(
@@ -457,14 +444,9 @@ class InventoryService
                 "Stock out recorded: " . count($items) . " items",
                 'stock_out'
             );
-
-            // Return the last transaction as a representative record
-            return StockTransaction::with(['product', 'warehouse'])
-                ->where('warehouse_id', $warehouseId)
-                ->where('type', StockTransaction::TYPE_SALE)
-                ->latest()
-                ->first();
         });
+
+        return StockTransaction::with(['product', 'warehouse'])->findOrFail($lastTransactionId);
     }
 
     public function getWarehouseStock(int $warehouseId, int $perPage = 15)

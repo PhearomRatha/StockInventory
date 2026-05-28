@@ -79,22 +79,31 @@ class StockOutsController extends Controller
         }
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         try {
+            $limit = min((int) $request->query('limit', 100), 500);
+
             $products = \App\Models\Products::select('id', 'name', 'sku', 'price')
                 ->withSum('warehouseProducts as total_qty', 'quantity')
+                ->orderBy('name')
+                ->limit($limit)
                 ->get();
 
             $customers = \App\Models\Customers::select('id', 'name', 'email', 'phone')
+                ->orderBy('name')
+                ->limit($limit)
                 ->get();
 
             $users = \App\Models\User::select('id', 'name', 'email')
+                ->orderBy('name')
+                ->limit($limit)
                 ->get();
 
             $stockOuts = StockTransaction::with(['product:id,name,sku,price', 'warehouse:id,name,code', 'creator:id,name'])
                 ->where('type', StockTransaction::TYPE_SALE)
                 ->latest()
+                ->limit($limit)
                 ->get()
                 ->map(function ($item) {
                     return [
