@@ -47,24 +47,21 @@ Route::middleware('throttle:5,1')->group(function () {
 // GOOGLE OAUTH ROUTES
 Route::prefix('auth')->group(function () {
     Route::post('/google', [AuthController::class, 'googleLogin']);
-    Route::post('/google-login', [AuthController::class, 'googleLogin']); // Alias for frontend compatibility
+    Route::post('/google-login', [AuthController::class, 'googleLogin']);
     Route::get('/google/redirect', [AuthController::class, 'googleRedirect']);
     Route::get('/google/callback', [AuthController::class, 'googleCallback']);
 });
 
-// Public roles listing (for dropdowns, etc.)
+// Public roles listing
 Route::get('/roles', [AuthController::class, 'getRoles']);
 Route::get('/roles/public', [RoleController::class, 'publicRoles']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
     // Current user info
     Route::get('/auth/me', [AuthController::class, 'me']);
-    // Logout
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/logout-all', [AuthController::class, 'logoutAll']);
-    // Refresh token
     Route::post('/auth/refresh', [AuthController::class, 'refreshToken']);
-    // Change password
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
 
     Route::middleware('role:Admin,Manager')->prefix('admin')->group(function () {
@@ -93,8 +90,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/reject-user-request', [AdminController::class, 'rejectUserRequest']);
     });
 
-    // Dashboard (Admin, Manager, Staff)
-    Route::prefix('dashboard')->middleware('role:Admin,Manager,Staff')->group(function () {
+    // Dashboard (Admin, Manager, Staff, Casher)
+    Route::prefix('dashboard')->middleware('role:Admin,Manager,Staff,Casher')->group(function () {
         Route::get('/index', [DashboardController::class, 'index']);
     });
 
@@ -106,19 +103,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 
-    // Products (Admin, Manager, Staff can view)
-    Route::middleware('role:Admin,Manager,Staff')->controller(ProductController::class)->prefix('products')->group(function () {
-        Route::get('/', 'index');
-        Route::get('/total', 'totalPro');
-        Route::get('/stock-status', 'stock');
-        Route::get('/{id}', 'show')->whereNumber('id');
-    });
-
     // Products (Admin, Manager full access)
     Route::middleware('role:Admin,Manager')->controller(ProductController::class)->prefix('products')->group(function () {
         Route::post('/', 'store');
         Route::patch('/{id}', 'update');
         Route::delete('/{id}', 'destroy');
+    });
+
+    // Products (Admin, Manager, Staff, Casher can view)
+    Route::middleware('role:Admin,Manager,Staff,Casher')->controller(ProductController::class)->prefix('products')->group(function () {
+        Route::get('/', 'index');
+        Route::get('/total', 'totalPro');
+        Route::get('/stock-status', 'stock');
+        Route::get('/{id}', 'show')->whereNumber('id');
     });
 
     // Categories (Admin, Manager)
@@ -138,8 +135,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 
-    // Customers (Admin, Manager, Staff)
-    Route::middleware('role:Admin,Manager,Staff')->controller(CustomerController::class)->prefix('customers')->group(function () {
+    // Customers (Admin, Manager, Staff, Casher)
+    Route::middleware('role:Admin,Manager,Staff,Casher')->controller(CustomerController::class)->prefix('customers')->group(function () {
         Route::get('/', 'index');
         Route::get('/{id}', 'show');
         Route::post('/', 'store');
@@ -147,20 +144,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 
-    // INVENTORY ROUTES (Admin, Manager, Staff) - fully aligned to new schema
+    // INVENTORY ROUTES (Admin, Manager, Staff)
     Route::middleware('role:Admin,Manager,Staff')->prefix('inventory')->group(function () {
-        // Stock Transactions (history of all movements)
         Route::get('/transactions', [StockTransactionController::class, 'index']);
         Route::get('/transactions/{id}', [StockTransactionController::class, 'show']);
-        Route::post('/purchases', [StockTransactionController::class, 'purchase']); // record PURCHASE type
+        Route::post('/purchases', [StockTransactionController::class, 'purchase']);
         Route::get('/overview', [StockTransactionController::class, 'overview']);
 
-        // Stock Adjustments
         Route::get('/adjustments', [StockAdjustmentController::class, 'index']);
         Route::get('/adjustments/{id}', [StockAdjustmentController::class, 'show']);
         Route::post('/adjustments', [StockAdjustmentController::class, 'store']);
 
-        // Transfers between warehouses
         Route::get('/transfers', [TransferController::class, 'index']);
         Route::get('/transfers/{id}', [TransferController::class, 'show']);
         Route::post('/transfers', [TransferController::class, 'store']);
@@ -186,14 +180,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{id}/receipt', 'receipt')->whereNumber('id');
     });
 
-    // Sales (Admin, Manager, Staff)
-    Route::middleware('role:Admin,Manager,Staff')->controller(SalesController::class)->prefix('sales')->group(function () {
+    // Sales (Admin, Manager, Staff, Casher)
+    Route::middleware('role:Admin,Manager,Staff,Casher')->controller(SalesController::class)->prefix('sales')->group(function () {
         Route::get('/', 'index');
         Route::post('/', 'store');
         Route::get('/dashboard', 'dashboard');
         Route::post('/checkout', 'checkoutSale');
         Route::get('/data', 'getSalesData');
-        Route::get('/verify-payment', 'verifyPayment'); // placeholder
+        Route::get('/verify-payment', 'verifyPayment');
         Route::get('/products', 'searchProducts');
         Route::get('/customers', 'searchCustomers');
         Route::get('/{id}', 'show')->whereNumber('id');
@@ -227,4 +221,3 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 });
-?>

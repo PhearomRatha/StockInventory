@@ -13,13 +13,13 @@ return new class extends Migration
     {
        Schema::create('stock_outs', function (Blueprint $table) {
     $table->id();
-    $table->foreignId('customer_id')->constrained('customers');
-    $table->foreignId('product_id')->constrained('products');
-    $table->integer('quantity');
-    $table->decimal('unit_price', 10, 2);
-    $table->decimal('total_amount', 10, 2);
-    $table->date('sold_date');
-    $table->foreignId('sold_by')->constrained('users');
+$table->foreignId('customer_id')->nullable()->constrained('customers');
+     $table->foreignId('product_id')->nullable()->constrained('products');
+     $table->integer('quantity');
+     $table->decimal('unit_price', 10, 2);
+     $table->decimal('total_amount', 10, 2);
+     $table->date('sold_date');
+     $table->foreignId('sold_by')->nullable()->constrained('users');
     $table->text('remarks')->nullable();
     $table->timestamps();
 });

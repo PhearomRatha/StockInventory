@@ -47,6 +47,7 @@ class MasterDataSeeder extends Seeder
         $admin = Roles::firstOrCreate(['name' => Roles::ROLE_ADMIN]);
         $manager = Roles::firstOrCreate(['name' => Roles::ROLE_MANAGER]);
         $staff = Roles::firstOrCreate(['name' => Roles::ROLE_STAFF]);
+        $casher = Roles::firstOrCreate(['name' => Roles::ROLE_CASHER]);
 
         if (Permission::count() === 0) {
             foreach (Permission::MODULES as $module) {
@@ -87,6 +88,14 @@ class MasterDataSeeder extends Seeder
             ->pluck('id')
             ->all();
         $staff->permissions()->sync($staffPermissions);
+
+        $casherPermissions = Permission::query()
+            ->where(function ($q) {
+                $q->where('module', 'sales')->whereIn('action', ['view', 'create']);
+            })
+            ->pluck('id')
+            ->all();
+        $casher->permissions()->sync($casherPermissions);
     }
 
     private function seedUsers(): array

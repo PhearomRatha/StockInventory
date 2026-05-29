@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('payment_method')->nullable();
             $table->string('md5')->nullable();
             $table->string('status')->default('completed');
-            $table->foreignId('sold_by')->constrained('users');
+            $table->foreignId('sold_by')->nullable()->constrained('users');
             $table->timestamps();
         });
 

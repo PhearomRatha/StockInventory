@@ -316,10 +316,10 @@ return new class extends Migration
             return;
         }
 
-        Schema::create('warehouse_products', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('warehouse_id')->constrained('warehouses')->cascadeOnDelete();
-            $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
+Schema::create('warehouse_products', function (Blueprint $table) {
+             $table->id();
+             $table->foreignId('warehouse_id')->nullable()->constrained('warehouses')->cascadeOnDelete();
+             $table->foreignId('product_id')->nullable()->constrained('products')->cascadeOnDelete();
             $table->decimal('quantity', 15, 2)->default(0);
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
             $table->unique(['warehouse_id', 'product_id']);
@@ -375,29 +375,29 @@ return new class extends Migration
         }
     }
 
-    private function alignSales(): void
-    {
-        if (!Schema::hasTable('sales')) {
-            return;
-        }
+private function alignSales(): void
+     {
+         if (!Schema::hasTable('sales')) {
+             return;
+         }
 
-        Schema::table('sales', function (Blueprint $table) {
-            if (!Schema::hasColumn('sales', 'warehouse_id')) {
-                $table->foreignId('warehouse_id')->nullable()->after('customer_id')->constrained('warehouses');
-            }
-            if (!Schema::hasColumn('sales', 'subtotal')) {
-                $table->decimal('subtotal', 15, 2)->default(0)->after('invoice_number');
-            }
-            if (!Schema::hasColumn('sales', 'tax')) {
-                $table->decimal('tax', 15, 2)->default(0)->after('discount');
-            }
-            if (!Schema::hasColumn('sales', 'notes')) {
-                $table->text('notes')->nullable()->after('payment_method');
-            }
-            if (!Schema::hasColumn('sales', 'sold_at')) {
-                $table->timestamp('sold_at')->nullable()->after('sold_by');
-            }
-        });
+         Schema::table('sales', function (Blueprint $table) {
+             if (!Schema::hasColumn('sales', 'warehouse_id')) {
+                 $table->foreignId('warehouse_id')->nullable()->after('customer_id')->constrained('warehouses');
+             }
+             if (!Schema::hasColumn('sales', 'subtotal')) {
+                 $table->decimal('subtotal', 15, 2)->default(0)->after('invoice_number');
+             }
+             if (!Schema::hasColumn('sales', 'tax')) {
+                 $table->decimal('tax', 15, 2)->default(0)->after('discount');
+             }
+             if (!Schema::hasColumn('sales', 'notes')) {
+                 $table->text('notes')->nullable()->after('payment_method');
+             }
+             if (!Schema::hasColumn('sales', 'sold_at')) {
+                 $table->timestamp('sold_at')->nullable()->after('sold_by');
+             }
+         });
 
         if (Schema::hasColumn('sales', 'total_amount') && !Schema::hasColumn('sales', 'total')) {
             if (DB::getDriverName() !== 'pgsql') {
@@ -552,11 +552,11 @@ return new class extends Migration
     private function alignStockTransactions(): void
     {
         if (!Schema::hasTable('stock_transactions')) {
-            Schema::create('stock_transactions', function (Blueprint $table) {
-                $table->id();
-                $table->string('reference_no')->unique();
-                $table->foreignId('warehouse_id')->constrained('warehouses')->cascadeOnDelete();
-                $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
+Schema::create('stock_transactions', function (Blueprint $table) {
+                 $table->id();
+                 $table->string('reference_no')->unique();
+                 $table->foreignId('warehouse_id')->nullable()->constrained('warehouses')->cascadeOnDelete();
+                 $table->foreignId('product_id')->nullable()->constrained('products')->cascadeOnDelete();
                 $table->enum('type', [
                     'PURCHASE',
                     'SALE',
@@ -569,8 +569,8 @@ return new class extends Migration
                 $table->decimal('total_cost', 15, 2)->nullable();
                 $table->unsignedBigInteger('related_id')->nullable();
                 $table->string('related_type')->nullable();
-                $table->text('notes')->nullable();
-                $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
+$table->text('notes')->nullable();
+                 $table->foreignId('created_by')->nullable()->constrained('users')->cascadeOnDelete();
                 $table->timestamps();
             });
 
@@ -616,21 +616,21 @@ return new class extends Migration
     private function createStockAdjustments(): void
     {
         if (!Schema::hasTable('stock_adjustments')) {
-            Schema::create('stock_adjustments', function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('warehouse_id')->constrained('warehouses')->cascadeOnDelete();
-                $table->string('reason');
-                $table->text('notes')->nullable();
-                $table->foreignId('adjusted_by')->constrained('users')->cascadeOnDelete();
+Schema::create('stock_adjustments', function (Blueprint $table) {
+                 $table->id();
+                 $table->foreignId('warehouse_id')->nullable()->constrained('warehouses')->cascadeOnDelete();
+                 $table->string('reason');
+                 $table->text('notes')->nullable();
+                 $table->foreignId('adjusted_by')->nullable()->constrained('users')->cascadeOnDelete();
                 $table->timestamps();
             });
         }
 
         if (!Schema::hasTable('stock_adjustment_items')) {
-            Schema::create('stock_adjustment_items', function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('adjustment_id')->constrained('stock_adjustments')->cascadeOnDelete();
-                $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
+Schema::create('stock_adjustment_items', function (Blueprint $table) {
+                 $table->id();
+                 $table->foreignId('adjustment_id')->nullable()->constrained('stock_adjustments')->cascadeOnDelete();
+                 $table->foreignId('product_id')->nullable()->constrained('products')->cascadeOnDelete();
                 $table->decimal('old_quantity', 15, 2);
                 $table->decimal('new_quantity', 15, 2);
                 $table->decimal('difference', 15, 2);
@@ -642,23 +642,23 @@ return new class extends Migration
     private function createTransfers(): void
     {
         if (!Schema::hasTable('transfers')) {
-            Schema::create('transfers', function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('from_warehouse_id')->constrained('warehouses')->cascadeOnDelete();
-                $table->foreignId('to_warehouse_id')->constrained('warehouses')->cascadeOnDelete();
-                $table->enum('status', ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'])->default('PENDING');
-                $table->text('notes')->nullable();
-                $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
-                $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+Schema::create('transfers', function (Blueprint $table) {
+                 $table->id();
+                 $table->foreignId('from_warehouse_id')->nullable()->constrained('warehouses')->cascadeOnDelete();
+                 $table->foreignId('to_warehouse_id')->nullable()->constrained('warehouses')->cascadeOnDelete();
+$table->enum('status', ['PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'])->default('PENDING');
+                 $table->text('notes')->nullable();
+                 $table->foreignId('created_by')->nullable()->constrained('users')->cascadeOnDelete();
+                 $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->timestamps();
             });
         }
 
         if (!Schema::hasTable('transfer_items')) {
-            Schema::create('transfer_items', function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('transfer_id')->constrained('transfers')->cascadeOnDelete();
-                $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
+Schema::create('transfer_items', function (Blueprint $table) {
+                 $table->id();
+                 $table->foreignId('transfer_id')->nullable()->constrained('transfers')->cascadeOnDelete();
+                 $table->foreignId('product_id')->nullable()->constrained('products')->cascadeOnDelete();
                 $table->decimal('quantity', 15, 2);
                 $table->timestamps();
             });

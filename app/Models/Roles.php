@@ -9,73 +9,57 @@ class Roles extends Model
 {
     use HasFactory;
 
-    /**
-     * Role constants
-     */
     public const ROLE_ADMIN = 'Admin';
     public const ROLE_MANAGER = 'Manager';
     public const ROLE_STAFF = 'Staff';
+    public const ROLE_CASHER = 'Casher';
 
     protected $fillable = [
         'name',
         'description',
     ];
 
-    /**
-     * Users relationship
-     */
-    public function users() {
+    public function users()
+    {
         return $this->hasMany(User::class);
     }
 
-    /**
-     * Permissions via role_permissions pivot (RBAC)
-     */
     public function permissions()
     {
         return $this->belongsToMany(Permission::class, 'role_permissions', 'role_id', 'permission_id')
             ->withTimestamps();
     }
 
-    /**
-     * Check if this role is Admin
-     */
     public function isAdmin(): bool
     {
         return $this->name === self::ROLE_ADMIN;
     }
 
-    /**
-     * Check if this role is Manager
-     */
     public function isManager(): bool
     {
         return $this->name === self::ROLE_MANAGER;
     }
 
-    /**
-     * Check if this role is Staff
-     */
     public function isStaff(): bool
     {
         return $this->name === self::ROLE_STAFF;
     }
 
-    /**
-     * Get all available roles as array
-     */
+    public function isCasher(): bool
+    {
+        return $this->name === self::ROLE_CASHER;
+    }
+
     public static function getRoleNames(): array
     {
         return [
             self::ROLE_ADMIN,
             self::ROLE_MANAGER,
             self::ROLE_STAFF,
+            self::ROLE_CASHER,
         ];
     }
 
-    /**
-     * Get role ID by name
-     */
     public static function getIdByName(string $name): ?int
     {
         $role = self::where('name', $name)->first();

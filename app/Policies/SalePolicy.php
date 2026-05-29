@@ -11,9 +11,19 @@ class SalePolicy
     /**
      * Determine whether the user can view any sales.
      */
-    public function viewAny(User $user): bool
+public function viewAny(User $user): bool
     {
-        return $user->can('sales.view');
+        return $user->isActive();
+    }
+
+    public function view(User $user, Sales $sale): bool
+    {
+        return $user->isActive();
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->isActive();
     }
 
     /**

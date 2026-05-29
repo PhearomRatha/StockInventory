@@ -9,6 +9,10 @@ class Sales extends Model
 {
     use HasFactory;
 
+    const PAYMENT_PAID = 'PAID';
+    const PAYMENT_UNPAID = 'UNPAID';
+    const PAYMENT_PARTIAL = 'PARTIAL';
+
     protected $fillable = [
         'customer_id',
         'warehouse_id',
@@ -62,6 +66,6 @@ class Sales extends Model
      */
     public function scopeUnpaid($query)
     {
-        return $query->where('payment_status', 'UNPAID');
+        return $query->where('payment_status', self::PAYMENT_UNPAID);
     }
 }

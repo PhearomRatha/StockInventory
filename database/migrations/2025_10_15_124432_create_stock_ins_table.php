@@ -11,18 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('stock_ins', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('supplier_id')->constrained('suppliers');
-    $table->foreignId('product_id')->constrained('products');
-    $table->integer('quantity');
-    $table->decimal('unit_cost', 10, 2);
-    $table->decimal('total_cost', 10, 2);
-    $table->date('received_date');
-    $table->foreignId('received_by')->constrained('users');
-    $table->text('remarks')->nullable();
-    $table->timestamps();
-});
+Schema::create('stock_ins', function (Blueprint $table) {
+     $table->id();
+     $table->foreignId('supplier_id')->nullable()->constrained('suppliers');
+     $table->foreignId('product_id')->nullable()->constrained('products');
+     $table->integer('quantity');
+     $table->decimal('unit_cost', 10, 2);
+     $table->decimal('total_cost', 10, 2);
+     $table->date('received_date');
+     $table->foreignId('received_by')->nullable()->constrained('users');
+     $table->text('remarks')->nullable();
+     $table->timestamps();
+ });
 
     }
 
