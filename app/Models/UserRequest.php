@@ -10,6 +10,7 @@ class UserRequest extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'email',
         'password',
@@ -17,7 +18,6 @@ class UserRequest extends Model
         'otp_expires_at',
         'otp_attempts',
         'role_id',
-        'verification_status',
         'status',
         'rejection_reason',
     ];

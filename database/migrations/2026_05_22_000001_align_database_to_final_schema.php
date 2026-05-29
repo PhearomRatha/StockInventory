@@ -77,7 +77,7 @@ return new class extends Migration
             // For SQLite, just ensure the correct columns exist
             if (!Schema::hasColumn('users', 'status')) {
                 Schema::table('users', function (Blueprint $table) {
-                    $table->enum('status', ['ACTIVE', 'INACTIVE'])->default('ACTIVE')->after('password');
+                    $table->enum('status', ['ACTIVE', 'INACTIVE', 'PENDING'])->default('ACTIVE')->after('password');
                 });
             }
             if (!Schema::hasColumn('users', 'last_login_at')) {
@@ -114,7 +114,7 @@ return new class extends Migration
         });
 
         Schema::table('users', function (Blueprint $table) {
-            $table->enum('status', ['ACTIVE', 'INACTIVE'])->default('ACTIVE')->after('password');
+            $table->enum('status', ['ACTIVE', 'INACTIVE', 'PENDING'])->default('ACTIVE')->after('password');
             if (!Schema::hasColumn('users', 'last_login_at')) {
                 $table->timestamp('last_login_at')->nullable()->after('status');
             }

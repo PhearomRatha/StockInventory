@@ -43,15 +43,20 @@ return new class extends Migration
         // Create user_requests table for pending registrations
         Schema::create('user_requests', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable(); // Link to user after creation
             $table->string('name');
             $table->string('email')->unique();
             $table->string('password');
             $table->string('otp_hash'); // Hashed OTP
             $table->timestamp('otp_expires_at');
             $table->integer('otp_attempts')->default(0); // Track OTP verification attempts
-            $table->string('role_id')->default(2); // Default to 'User' role
-            $table->enum('verification_status', ['PENDING', 'VERIFIED', 'EXPIRED'])->default('PENDING');
+            $table->unsignedBigInteger('role_id')->default(2); // Default to Staff role
+            $table->enum('status', ['PENDING', 'APPROVED', 'REJECTED'])->default('PENDING');
+            $table->string('rejection_reason')->nullable();
             $table->timestamps();
+
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('role_id')->references('id')->on('roles')->onDelete('set null');
         });
 
         // Create token_revocation table for JWT token revocation

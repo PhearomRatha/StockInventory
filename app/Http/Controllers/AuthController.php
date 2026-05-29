@@ -523,18 +523,28 @@ $user->load(['role.permissions']);
                 ], 500);
             }
 
-            // Create the user with default Staff role
+            // Create the user with default Staff role - pending admin approval
             $user = User::create([
                 'name' => $validatedData['name'],
                 'email' => $validatedData['email'],
                 'password' => Hash::make($validatedData['password']),
                 'role_id' => $staffRole->id,
-                'status' => User::STATUS_ACTIVE,
+                'status' => User::STATUS_PENDING,
+            ]);
+
+            // Create a user request for admin approval workflow
+            UserRequest::create([
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => $user->password, // Store hashed password for reference
+                'role_id' => $staffRole->id,
+                'status' => 'pending',
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'User registered successfully',
+                'message' => 'Registration successful! Please wait for admin approval.',
                 'user' => $user,
             ], 201);
 

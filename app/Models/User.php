@@ -35,9 +35,8 @@ class User extends Authenticatable
     public const ROLE_STAFF = 'Staff';
 
 /**
-      * Status constants
-      */
-    public const STATUS_PENDING = 'PENDING';
+     * Status constants
+     */
     public const STATUS_ACTIVE = 'ACTIVE';
     public const STATUS_INACTIVE = 'INACTIVE';
 
@@ -129,12 +128,12 @@ class User extends Authenticatable
         return $this->status === self::STATUS_ACTIVE;
     }
 
-    /**
-     * Check if user is inactive
-     */
+/**
+      * Check if user is inactive
+      */
     public function isInactive(): bool
     {
-        return $this->status === self::STATUS_INACTIVE;
+        return $this->status !== self::STATUS_ACTIVE;
     }
 
     /**

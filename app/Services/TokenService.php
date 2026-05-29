@@ -116,14 +116,9 @@ class TokenService
 
         // Check if user is active
         if ($user->status !== User::STATUS_ACTIVE) {
-            $statusMessages = [
-                User::STATUS_PENDING => 'Your account is pending approval. Please wait for administrator verification.',
-                User::STATUS_INACTIVE => 'Your account has been deactivated. Please contact administrator.',
-            ];
-
             return [
                 'success' => false,
-                'message' => $statusMessages[$user->status] ?? 'Account is not active.',
+                'message' => 'Your account is not active. Please contact administrator.',
                 'code' => 403,
                 'data' => [
                     'user_status' => $user->status,
