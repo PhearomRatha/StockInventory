@@ -37,6 +37,7 @@ class User extends Authenticatable
 /**
      * Status constants
      */
+    public const STATUS_PENDING = 'PENDING';
     public const STATUS_ACTIVE = 'ACTIVE';
     public const STATUS_INACTIVE = 'INACTIVE';
 
