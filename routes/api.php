@@ -221,3 +221,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 });
+Route::middleware('auth:sanctum')->get('/debug-me', function (Request $request) {
+    $user = $request->user();
+    $user->load('role.permissions');
+
+    return response()->json([
+        'user_id' => $user->id,
+        'email' => $user->email,
+        'status' => $user->status,
+        'role_id' => $user->role_id,
+        'role_name' => $user->role?->name,
+        'role_loaded' => $user->relationLoaded('role'),
+        'permissions_loaded' => $user->role?->relationLoaded('permissions'),
+        'permissions_count' => $user->role?->permissions()->count(),
+        'can_suppliers_view' => \App\Services\PermissionService::can($user, 'suppliers.view'),
+        'gate_check' => \Illuminate\Support\Facades\Gate::forUser($user)->check('suppliers.view'),
+    ]);
+});
