@@ -27,13 +27,16 @@ class AuthServiceProvider extends ServiceProvider
         $this->registerPolicies();
 
         // Make $user->can('module.action') and Gate checks use our dynamic RBAC from DB
-        Gate::before(function (User $user, string $ability, array $arguments = []) {
-            // If our permission service grants it, allow
+        Gate::before(function (User $user, string $ability) {
+            // Only handle module.action format, let others pass through
+            if (!str_contains($ability, '.')) {
+                return null;
+            }
+
             if (PermissionService::can($user, $ability)) {
                 return true;
             }
 
-            // Return null to let other gates/policies decide (e.g. for model-specific)
             return null;
         });
     }

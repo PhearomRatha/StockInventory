@@ -12,7 +12,7 @@ class PermissionService
      */
     public static function can(User $user, string $ability): bool
     {
-        if (! $user->role) {
+        if (!$user->role_id) {
             return false;
         }
 
@@ -20,17 +20,26 @@ class PermissionService
             return false;
         }
 
-        // Support both "module.action" and legacy "action_module" but prefer module.action
+        // Force reload role with permissions if not loaded
+        if (!$user->relationLoaded('role') || !$user->role->relationLoaded('permissions')) {
+            $user->load('role.permissions');
+        }
+
+        if (!$user->role) {
+            return false;
+        }
+
         $parts = explode('.', $ability);
         if (count($parts) === 2) {
             [$module, $action] = $parts;
-            return $user->role->permissions()
+
+            // Check from already-loaded collection, no extra DB query
+            return $user->role->permissions
                 ->where('module', $module)
                 ->where('action', $action)
-                ->exists();
+                ->isNotEmpty();
         }
 
-        // Fallback for old style like create_product -> products.create ? but we standardize on module.action
         return false;
     }
 
@@ -53,7 +62,7 @@ class PermissionService
 
         return $user->role->permissions()
             ->get(['module', 'action'])
-            ->map(fn ($p) => "{$p->module}.{$p->action}")
+            ->map(fn($p) => "{$p->module}.{$p->action}")
             ->toArray();
     }
 }
