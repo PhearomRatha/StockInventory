@@ -19,6 +19,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\TransferController;
+use GuzzleHttp\Psr7\Request;
 use Illuminate\Support\Facades\DB;
 
 // TEST ROUTES
@@ -221,20 +222,31 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{id}', 'destroy');
     });
 });
-Route::middleware('auth:sanctum')->get('/debug-me', function (Request $request) {
-    $user = $request->user();
+Route::middleware('auth:sanctum')->get('/debug-me', function () {
+    $user = auth()->user();
     $user->load('role.permissions');
 
     return response()->json([
-        'user_id' => $user->id,
-        'email' => $user->email,
-        'status' => $user->status,
-        'role_id' => $user->role_id,
-        'role_name' => $user->role?->name,
-        'role_loaded' => $user->relationLoaded('role'),
-        'permissions_loaded' => $user->role?->relationLoaded('permissions'),
-        'permissions_count' => $user->role?->permissions()->count(),
-        'can_suppliers_view' => \App\Services\PermissionService::can($user, 'suppliers.view'),
-        'gate_check' => \Illuminate\Support\Facades\Gate::forUser($user)->check('suppliers.view'),
+        'user_id'           => $user->id,
+        'email'             => $user->email,
+        'status'            => $user->status,
+        'role_id'           => $user->role_id,
+        'role_name'         => optional($user->role)->name,
+        'permissions_count' => optional($user->role)->permissions()->count() ?? 0,
+        'can_check'         => \App\Services\PermissionService::can($user, 'suppliers.view'),
+    ]);
+});
+Route::middleware('auth:sanctum')->get('/debug-me1', function () {
+    $user = auth()->user();
+    $user->load('role.permissions');
+
+    return response()->json([
+        'user_id'          => $user->id,
+        'email'            => $user->email,
+        'status'           => $user->status,
+        'role_id'          => $user->role_id,
+        'role_name'        => optional($user->role)->name,
+        'permissions_count' => optional($user->role)->permissions()->count() ?? 0,
+        'can_check'        => \App\Services\PermissionService::can($user, 'suppliers.view'),
     ]);
 });
