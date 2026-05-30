@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -26,6 +27,16 @@ class RoleMiddleware
                 'message' => 'Unauthenticated',
                 'error_code' => 'NOT_AUTHENTICATED'
             ], 401);
+        }
+
+        // Check if user account is active
+        if ($user->status !== User::STATUS_ACTIVE) {
+            return response()->json([
+                'status' => 403,
+                'message' => 'Access denied. Your account is not active.',
+                'error_code' => 'ACCOUNT_INACTIVE',
+                'required_roles' => $roles
+            ], 403);
         }
 
         // Load the role relation if it's not already loaded
